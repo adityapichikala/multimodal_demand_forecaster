@@ -16,7 +16,9 @@ import json
 NEWSAPI_AI_KEY = os.getenv("NEWSAPI_AI_KEY", os.getenv("THENEWSAPI_KEY", ""))
 BASE_URL = "https://eventregistry.org/api/v1/article/getArticles"
 
+from fastapi_cache.decorator import cache
 
+@cache(expire=10800) # 3 hours
 def get_news_summary(search_terms: str = "supply chain retail demand", max_articles: int = 5) -> str:
     """
     Fetch the latest news headlines matching the search terms from newsapi.ai (EventRegistry).
@@ -78,6 +80,7 @@ def get_news_summary(search_terms: str = "supply chain retail demand", max_artic
     return "\n".join(lines)
 
 
+@cache(expire=10800) # 3 hours
 def get_retail_news(city: str = None, item: str = None) -> str:
     """
     Fetch news targeted at retail demand signals for a specific city/item.
