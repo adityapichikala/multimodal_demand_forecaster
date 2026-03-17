@@ -129,6 +129,14 @@ async def upload_data(
         contents = await csv_file.read()
         df = pd.read_csv(io.BytesIO(contents), parse_dates=["date"])
         
+        # Ensure products exist for relational integrity
+        product_items = df["item"].unique()
+        for p_id in product_items:
+            p_id_int = int(p_id)
+            if not db.query(Product).filter(Product.id == p_id_int, Product.merchant_id == current_merchant.id).first():
+                db.add(Product(id=p_id_int, name=f"Product {p_id_int}", merchant_id=current_merchant.id))
+        db.commit()
+        
         # Batch insert into DB
         sales_records = []
         for _, row in df.iterrows():
@@ -191,20 +199,22 @@ async def get_task_status(
 @limiter.limit("5/minute") # Strict LLM Rate Limits
 async def analyze(
     request: Request,
-    forecast_summary: str = Form(..., description="JSON-encoded forecast summary from /train"),
+    forecast_id: int = Form(..., description="The ID of the generated forecast"),
     city: str = Form("New York"),
     image_file: Optional[UploadFile] = File(None),
+    db: Session = Depends(get_db),
     current_merchant: Merchant = Depends(get_current_merchant)
 ):
     """
     Step 2 of the pipeline.
-    Accepts the forecast summary (as JSON string) produced by /train,
-    fetches weather + news, and sends everything to Gemini 2.0 Flash.
+    Fetches forecast data from DB using forecast_id, fetches weather + news,
+    and sends everything to the Multi-Agent Verification Pipeline.
     """
-    try:
-        summary = json.loads(forecast_summary)
-    except Exception:
-        raise HTTPException(status_code=400, detail="forecast_summary must be valid JSON")
+    forecast = db.query(models.Forecast).filter(models.Forecast.id == forecast_id).first()
+    if not forecast:
+        raise HTTPException(status_code=404, detail="Forecast not found")
+        
+    summary = forecast.forecast_data.get("summary") if forecast.forecast_data else {}
 
     # Fetch weather and news in sequence (both are fast I/O calls)
     weather_text = get_weather_summary(city=city)
@@ -224,6 +234,10 @@ async def analyze(
         weather_text=weather_text,
         news_text=news_text
     )
+
+    # Save the agent feedback back to the database
+    forecast.gemini_report = report
+    db.commit()
 
     return JSONResponse(content={
         "success":         True,

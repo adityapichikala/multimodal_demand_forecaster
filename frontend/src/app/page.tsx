@@ -80,11 +80,11 @@ export default function Dashboard() {
   };
 
   const handleAnalyze = async (forecastResult: any) => {
-    setTaskStatus(prev => ({ ...prev, task_status: 'GENERATING_REPORT' }));
+    setTaskStatus((prev: any) => ({ ...prev, task_status: 'GENERATING_REPORT' }));
     
     try {
       const formData = new FormData();
-      formData.append('forecast_summary', JSON.stringify(forecastResult.summary));
+      formData.append('forecast_id', forecastResult.forecast_id.toString());
       formData.append('city', city);
       
       const res = await fetchWithAuth('/analyze', {
@@ -96,10 +96,10 @@ export default function Dashboard() {
       if (!res.ok) throw new Error(data.detail || 'Analysis failed');
       
       setReport(data.gemini_report);
-      setTaskStatus(prev => ({ ...prev, task_status: 'COMPLETE' }));
+      setTaskStatus((prev: any) => ({ ...prev, task_status: 'COMPLETE' }));
     } catch (err: any) {
       setError(err.message);
-      setTaskStatus(prev => ({ ...prev, task_status: 'ERROR' }));
+      setTaskStatus((prev: any) => ({ ...prev, task_status: 'ERROR' }));
     }
   };
 
