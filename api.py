@@ -131,19 +131,24 @@ async def upload_data(
         
         # Ensure products exist for relational integrity
         product_items = df["item"].unique()
+        product_map = {}
         for p_id in product_items:
             p_id_int = int(p_id)
-            if not db.query(Product).filter(Product.id == p_id_int, Product.merchant_id == current_merchant.id).first():
-                db.add(Product(id=p_id_int, name=f"Product {p_id_int}", merchant_id=current_merchant.id))
-        db.commit()
-        
+            prod = db.query(Product).filter(Product.item_id == p_id_int, Product.merchant_id == current_merchant.id).first()
+            if not prod:
+                prod = Product(item_id=p_id_int, name=f"Product {p_id_int}", merchant_id=current_merchant.id)
+                db.add(prod)
+                db.commit()
+                db.refresh(prod)
+            product_map[p_id_int] = prod.id
+            
         # Batch insert into DB
         sales_records = []
         for _, row in df.iterrows():
             sales_records.append(
                 HistoricalSale(
                     store_id=row["store"],
-                    product_id=row["item"],
+                    product_id=product_map[int(row["item"])],
                     date=row["date"].date(),
                     sales=row["sales"]
                 )
@@ -162,12 +167,17 @@ async def train_async(
     request: Request,
     store: int = Form(...),
     item: int = Form(...),
+    db: Session = Depends(get_db),
     current_merchant: Merchant = Depends(get_current_merchant)
 ):
     """
     Enqueues a background task to train a Prophet model and returns a task_id.
     """
-    task = run_async_forecast.delay(store_id=store, product_id=item)
+    product = db.query(Product).filter(Product.item_id == item, Product.merchant_id == current_merchant.id).first()
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found. Please upload historical data for this item first.")
+        
+    task = run_async_forecast.delay(store_id=store, product_pk=product.id)
     return JSONResponse(status_code=202, content={"task_id": task.id, "status": "Processing"})
 
 @app.get("/task/{task_id}")
@@ -213,6 +223,9 @@ async def analyze(
     forecast = db.query(models.Forecast).filter(models.Forecast.id == forecast_id).first()
     if not forecast:
         raise HTTPException(status_code=404, detail="Forecast not found")
+        
+    if forecast.product.merchant_id != current_merchant.id:
+        raise HTTPException(status_code=403, detail="Not authorized to access this forecast")
         
     summary = forecast.forecast_data.get("summary") if forecast.forecast_data else {}
 
