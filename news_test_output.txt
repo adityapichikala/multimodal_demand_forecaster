@@ -1,0 +1,15 @@
+
+Testing term: 'retail'
+  Found 2 articles.
+
+Testing term: 'supply'
+  Found 2 articles.
+
+Testing term: 'supply chain'
+  Found 2 articles.
+
+Testing term: 'Amazon'
+  Found 2 articles.
+
+Testing term: 'business'
+  Found 2 articles.
