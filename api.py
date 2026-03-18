@@ -45,8 +45,6 @@ from sqlalchemy.orm import Session
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Initialize Redis Cache
-    
-    # Initialize Redis Cache
     redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
     r = redis_async.from_url(redis_url, encoding="utf8", decode_responses=True)
     FastAPICache.init(RedisBackend(r), prefix="fastapi-cache")

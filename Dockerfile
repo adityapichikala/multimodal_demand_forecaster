@@ -1,11 +1,12 @@
 # ───────────────────────────────────────────────────────────────────
-# Multimodal Demand Forecaster – Dockerfile
-# Runs FastAPI (port 8000) + Streamlit (port 8080) in one container
+# Multimodal Demand Forecaster – Backend Dockerfile
+# Serves FastAPI (api service) and Celery (worker service) via
+# docker-compose.yml – the CMD is overridden per service.
 # ───────────────────────────────────────────────────────────────────
 
 FROM python:3.11-slim
 
-# System dependencies needed for Prophet / PyStan compilation
+# System dependencies for Prophet / PyStan compilation
 RUN apt-get update && apt-get install -y \
     gcc \
     g++ \
@@ -17,7 +18,7 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
-# Install Python dependencies first (layer caching)
+# Install Python dependencies (layer caching)
 COPY requirements.txt .
 RUN pip install --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
@@ -25,11 +26,8 @@ RUN pip install --upgrade pip && \
 # Copy application source
 COPY . .
 
-# Make startup script executable
-RUN chmod +x start.sh
+# Expose FastAPI port
+EXPOSE 8000
 
-# Expose Streamlit port (Cloud Run routes to this)
-EXPOSE 8080
-
-# Start both services via shell script
-CMD ["./start.sh"]
+# Default command (overridden in docker-compose per service)
+CMD ["uvicorn", "api:app", "--host", "0.0.0.0", "--port", "8000"]

@@ -32,7 +32,7 @@ services:
     env_file:
       - .env
     environment:
-      - DATABASE_URL=postgresql://postgres:12345678@db:5432/antigravity_db
+      - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD:-12345678}@db:5432/antigravity_db
       - REDIS_URL=redis://redis:6379/0
     depends_on:
       db:
@@ -48,7 +48,7 @@ services:
     env_file:
       - .env
     environment:
-      - DATABASE_URL=postgresql://postgres:12345678@db:5432/antigravity_db
+      - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD:-12345678}@db:5432/antigravity_db
       - REDIS_URL=redis://redis:6379/0
     depends_on:
       db:
@@ -63,7 +63,9 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - NEXT_PUBLIC_API_URL=http://localhost:8000
+      # On Mac/Windows Docker Desktop, host.docker.internal resolves to the host.
+      # For Linux, set NEXT_PUBLIC_API_URL=http://<your-host-ip>:8000 in .env
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8000}
     depends_on:
       - api
 
