@@ -19,7 +19,7 @@ BASE_URL = "https://api.weatherapi.com/v1/forecast.json"
 from fastapi_cache.decorator import cache
 
 @cache(expire=10800) # 3 hours
-def get_weather_summary(city: str = "New York") -> str:
+async def get_weather_summary(city: str = "New York") -> str:
     """
     Fetch a 5-day weather forecast for the given city from WeatherAPI.com
     and return a concise formatted text summary.

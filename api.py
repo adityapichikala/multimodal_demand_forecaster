@@ -244,8 +244,8 @@ async def analyze(
     summary = forecast.forecast_data.get("summary") if forecast.forecast_data else {}
 
     # Fetch weather and news in sequence (both are fast I/O calls)
-    weather_text = get_weather_summary(city=city)
-    news_text    = get_retail_news(city=city, item=f"item {summary.get('item', '')}")
+    weather_text = await get_weather_summary(city=city)
+    news_text    = await get_retail_news(city=city, item=f"item {summary.get('item', '')}")
 
     # Optional image (ignored in this phase but prepared for Future Phase 4)
     image_bytes = None
@@ -263,8 +263,8 @@ async def analyze(
             news_text=news_text
         )
     except Exception as e:
-        if "429" in str(e) or "quota" in str(e).lower():
-            raise HTTPException(status_code=429, detail="AI Quota Exceeded (Gemini 2.0 Flash). You have hit the API rate limit, please wait a minute and try again.")
+        if "429" in str(e) or "quota" in str(e).lower() or "rate limit" in str(e).lower():
+            raise HTTPException(status_code=429, detail="AI Quota Exceeded (Gemini 2.0 Flash) AND Fallback (OpenRouter) is currently overloaded globally upstream. Please wait a few minutes and try again.")
         raise HTTPException(status_code=500, detail=f"AI Pipeline Error: {str(e)}")
 
     # Save the agent feedback back to the database

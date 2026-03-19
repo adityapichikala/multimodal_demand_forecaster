@@ -33,7 +33,7 @@ auditor_llm = ChatGoogleGenerativeAI(
 openrouter_kwargs = {
     "base_url": "https://openrouter.ai/api/v1",
     "api_key": os.getenv("OPENROUTER_API_KEY"),
-    "model": "qwen/qwen2.5-vl-7b:free",
+    "model": "openrouter/free",
 }
 
 fallback_llm = ChatOpenAI(**openrouter_kwargs, temperature=0.2)

@@ -19,7 +19,7 @@ BASE_URL = "https://eventregistry.org/api/v1/article/getArticles"
 from fastapi_cache.decorator import cache
 
 @cache(expire=10800) # 3 hours
-def get_news_summary(search_terms: str = "supply chain retail demand", max_articles: int = 5) -> str:
+async def get_news_summary(search_terms: str = "supply chain retail demand", max_articles: int = 5) -> str:
     """
     Fetch the latest news headlines matching the search terms from newsapi.ai (EventRegistry).
     """
@@ -81,7 +81,7 @@ def get_news_summary(search_terms: str = "supply chain retail demand", max_artic
 
 
 @cache(expire=10800) # 3 hours
-def get_retail_news(city: str = None, item: str = None) -> str:
+async def get_retail_news(city: str = None, item: str = None) -> str:
     """
     Fetch news targeted at retail demand signals for a specific city/item.
     Combines results from multiple relevant searches.
@@ -89,4 +89,4 @@ def get_retail_news(city: str = None, item: str = None) -> str:
     # EventRegistry (newsapi.ai) keyword searches are very strict.
     # We use a broad, guaranteed match like "supply chain" so the API always returns data.
     search_terms = "supply chain"
-    return get_news_summary(search_terms=search_terms, max_articles=5)
+    return await get_news_summary(search_terms=search_terms, max_articles=5)
