@@ -151,6 +151,11 @@ async def upload_data(
                 db.refresh(prod)
             product_map[p_id_int] = prod.id
             
+        # Clear existing historical sales for these products to prevent duplicates
+        for p_id in product_map.values():
+            db.query(HistoricalSale).filter(HistoricalSale.product_id == p_id).delete()
+        db.commit()
+
         # Batch insert into DB
         sales_records = []
         for _, row in df.iterrows():
