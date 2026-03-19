@@ -3,18 +3,28 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { fetchWithAuth, removeToken } from '@/lib/api';
-import { LogOut, LineChart, MessageSquare, AlertTriangle, CloudRain, PackageSearch, Loader2 } from 'lucide-react';
+import { LogOut, LineChart, MessageSquare, AlertTriangle, CloudRain, PackageSearch, Loader2, Upload } from 'lucide-react';
 
 export default function Dashboard() {
   const router = useRouter();
-  const [store, setStore] = useState('1');
-  const [item, setItem] = useState('1');
+  // Selection State
+  const [store, setStore] = useState('');
+  const [item, setItem] = useState('');
   const [city, setCity] = useState('New York');
+  
+  // Available Meta State
+  const [availableStores, setAvailableStores] = useState<number[]>([]);
+  const [availableItems, setAvailableItems] = useState<number[]>([]);
   
   const [taskStatus, setTaskStatus] = useState<any>(null);
   const [report, setReport] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [polling, setPolling] = useState(false);
+  
+  // Upload state
+  const [file, setFile] = useState<File | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadMsg, setUploadMsg] = useState('');
 
   // Poll for Celery Worker status
   useEffect(() => {
@@ -48,9 +58,57 @@ export default function Dashboard() {
     return () => clearInterval(interval);
   }, [polling, taskStatus]);
 
+  const fetchMeta = async () => {
+    try {
+      const res = await fetchWithAuth('/dashboard-meta');
+      if (res.ok) {
+        const data = await res.json();
+        setAvailableStores(data.stores || []);
+        setAvailableItems(data.products || []);
+        if (data.stores?.length > 0 && !store) setStore(data.stores[0].toString());
+        if (data.products?.length > 0 && !item) setItem(data.products[0].toString());
+      }
+    } catch(e) {
+      console.error(e);
+    }
+  };
+
+  useEffect(() => {
+    fetchMeta();
+  }, []);
+
   const handleLogout = () => {
     removeToken();
     router.push('/login');
+  };
+
+  const handleUpload = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!file) return;
+    setUploading(true);
+    setUploadMsg('');
+    setError('');
+
+    try {
+      const formData = new FormData();
+      formData.append('csv_file', file);
+      
+      const res = await fetchWithAuth('/upload-data', {
+        method: 'POST',
+        body: formData
+      });
+      
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Upload failed');
+      
+      setUploadMsg(data.message || 'Upload successful! DB is seeded.');
+      setFile(null);
+      await fetchMeta(); // Refresh dropdowns
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setUploading(false);
+    }
   };
 
   const handleGenerateForecast = async () => {
@@ -130,7 +188,34 @@ export default function Dashboard() {
             
             <h2 className="text-lg font-semibold text-white mb-6 flex items-center">
               <PackageSearch className="w-5 h-5 mr-2 text-blue-400" />
-              Forecast Parameters
+              1. Feed Intelligence Data
+            </h2>
+
+            <form onSubmit={handleUpload} className="space-y-4 relative z-10 mb-8 pb-6 border-b border-gray-800">
+              <div>
+                <label className="block text-sm text-gray-400 mb-2">Upload Historical Sales (CSV)</label>
+                <div className="flex items-center space-x-3">
+                  <input 
+                    type="file" 
+                    accept=".csv"
+                    onChange={(e) => setFile(e.target.files ? e.target.files[0] : null)}
+                    className="w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-blue-900/30 file:text-blue-400 hover:file:bg-blue-900/50 cursor-pointer"
+                  />
+                  <button 
+                    type="submit"
+                    disabled={!file || uploading}
+                    className="bg-blue-600 hover:bg-blue-500 text-white p-2.5 rounded-lg disabled:opacity-50 transition-colors"
+                  >
+                    {uploading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Upload className="w-5 h-5" />}
+                  </button>
+                </div>
+                {uploadMsg && <p className="text-green-400 text-sm mt-3 flex items-center">{uploadMsg}</p>}
+              </div>
+            </form>
+
+            <h2 className="text-lg font-semibold text-white mb-6 flex items-center">
+              <PackageSearch className="w-5 h-5 mr-2 text-indigo-400" />
+              2. Forecast Parameters
             </h2>
 
             <div className="space-y-5 relative z-10">
@@ -140,7 +225,11 @@ export default function Dashboard() {
                   value={store} onChange={e => setStore(e.target.value)}
                   className="w-full bg-gray-950 border border-gray-700 rounded-lg px-4 py-2.5 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all text-white outline-none"
                 >
-                  {[1, 2, 3, 4, 5].map(n => <option key={n} value={n}>Store #{n}</option>)}
+                  {availableStores.length === 0 ? (
+                    <option value="" disabled>No data uploaded</option>
+                  ) : (
+                    availableStores.map(n => <option key={n} value={n}>Store #{n}</option>)
+                  )}
                 </select>
               </div>
 
@@ -150,7 +239,11 @@ export default function Dashboard() {
                   value={item} onChange={e => setItem(e.target.value)}
                   className="w-full bg-gray-950 border border-gray-700 rounded-lg px-4 py-2.5 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all text-white outline-none"
                 >
-                  {[1, 2, 3, 4, 5, 10, 25, 50].map(n => <option key={n} value={n}>Item #{n}</option>)}
+                  {availableItems.length === 0 ? (
+                    <option value="" disabled>No data uploaded</option>
+                  ) : (
+                    availableItems.map(n => <option key={n} value={n}>Item #{n}</option>)
+                  )}
                 </select>
               </div>
 

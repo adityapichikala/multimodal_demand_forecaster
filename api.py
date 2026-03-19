@@ -13,6 +13,7 @@ import io
 import json
 import os
 import datetime
+import pandas as pd
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile, Depends, Request
@@ -109,6 +110,17 @@ async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(
 def health_check():
     return {"status": "ok", "service": "Multimodal Demand Forecaster API"}
 
+
+# ─── Dashboard Meta ────────────────────────────────────────────────────────────
+@app.get("/dashboard-meta")
+async def get_dashboard_meta(db: Session = Depends(get_db), current_merchant: Merchant = Depends(get_current_merchant)):
+    products = db.query(Product.item_id).filter(Product.merchant_id == current_merchant.id).distinct().all()
+    pr_ids = sorted([p[0] for p in products])
+
+    stores = db.query(HistoricalSale.store_id).join(Product, HistoricalSale.product_id == Product.id).filter(Product.merchant_id == current_merchant.id).distinct().all()
+    st_ids = sorted([s[0] for s in stores])
+
+    return {"stores": st_ids, "products": pr_ids}
 
 # ─── Stage 1a: Upload Data ───────────────────────────────────────────────────
 @app.post("/upload-data")
@@ -239,11 +251,16 @@ async def analyze(
             image_bytes = None
 
     # Call Multi-Agent Pipeline
-    report = run_verification_pipeline(
-        forecast_summary=summary,
-        weather_text=weather_text,
-        news_text=news_text
-    )
+    try:
+        report = run_verification_pipeline(
+            forecast_summary=summary,
+            weather_text=weather_text,
+            news_text=news_text
+        )
+    except Exception as e:
+        if "429" in str(e) or "quota" in str(e).lower():
+            raise HTTPException(status_code=429, detail="AI Quota Exceeded (Gemini 2.0 Flash). You have hit the API rate limit, please wait a minute and try again.")
+        raise HTTPException(status_code=500, detail=f"AI Pipeline Error: {str(e)}")
 
     # Save the agent feedback back to the database
     forecast.gemini_report = report
