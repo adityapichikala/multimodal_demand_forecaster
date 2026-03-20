@@ -9,6 +9,7 @@ load_dotenv()
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage
+from datetime import date
 
 # Initialize Gemini models via LangChain
 llm = ChatGoogleGenerativeAI(
@@ -62,6 +63,8 @@ def run_verification_pipeline(forecast_summary: dict, weather_text: str, news_te
     
     Data:
     {json.dumps(forecast_summary, indent=2)}
+    
+    IMPORTANT: Explicitly identify the PEAK (Maximum) forecasted value in your summary.
     """
     analyst_output = safe_llm.invoke([HumanMessage(content=analyst_prompt)]).content
     time.sleep(5) # Prevent burst limit on free tier where possible
@@ -100,11 +103,12 @@ def run_verification_pipeline(forecast_summary: dict, weather_text: str, news_te
     Contextual Risk:
     {researcher_output}
     
-    Ensure your final report includes:
-    1. Executive Summary
+    1. Executive Summary (Use current date: {date.today().strftime('%B %d, %Y')})
     2. Quantitative Forecast (The Math)
     3. Qualitative Context (News/Weather Impact)
-    4. Actionable Inventory Recommendation
+    4. Actionable Inventory Recommendation (Priority: Stockout prevention. Use the PEAK forecasted values, not just the average, to determine required buffer stock).
+    
+    RETURN ONLY THE MARKDOWN REPORT. No introductory or concluding remarks.
     """
     draft_report = safe_drafter.invoke([HumanMessage(content=drafter_prompt)]).content
     time.sleep(5)
@@ -131,4 +135,4 @@ def run_verification_pipeline(forecast_summary: dict, weather_text: str, news_te
     final_verified_report = safe_auditor.invoke([HumanMessage(content=auditor_prompt)]).content
     
     print("--- Pipeline Complete ---")
-    return final_verified_report
+    return final_verified_report.strip()
