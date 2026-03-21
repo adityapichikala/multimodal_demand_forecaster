@@ -14,7 +14,7 @@ export default function Dashboard() {
   
   // Available Meta State
   const [availableStores, setAvailableStores] = useState<number[]>([]);
-  const [availableItems, setAvailableItems] = useState<{id: number, name: string}[]>([]);
+  const [availableItems, setAvailableItems] = useState<{id: string | number, name: string}[]>([]);
   
   const [taskStatus, setTaskStatus] = useState<any>(null);
   const [report, setReport] = useState<string | null>(null);
