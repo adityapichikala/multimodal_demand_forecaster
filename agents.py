@@ -106,7 +106,7 @@ def run_verification_pipeline(forecast_summary: dict, weather_text: str, news_te
     1. Executive Summary (Use current date: {date.today().strftime('%B %d, %Y')})
     2. Quantitative Forecast (The Math)
     3. Qualitative Context (News/Weather Impact)
-    4. Actionable Inventory Recommendation (Priority: Stockout prevention. Use the PEAK forecasted values, not just the average, to determine required buffer stock).
+    4. Actionable Inventory Recommendation (Analyze the trend: If demand is increasing, prioritize stockout prevention using PEAK forecasted values. If demand is crashing or decreasing, focus on avoiding overstocking and dead inventory, and recommend tapering down orders).
     
     RETURN ONLY THE MARKDOWN REPORT. No introductory or concluding remarks.
     """
