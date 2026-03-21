@@ -68,7 +68,7 @@ graph TB
     end
 
     subgraph External["🌐 External APIs"]
-        WA["OpenWeatherMap API"]
+        WA["WeatherAPI.com API"]
         NA["TheNewsAPI"]
         GM["Google Gemini 2.0 Flash"]
         OR["OpenRouter (Fallback)"]
@@ -124,7 +124,7 @@ This is the core differentiator. Instead of a single LLM call that can hallucina
 ┌─────────────────────────────────────────────────────────────────┐
 │  AGENT 2: CONTEXT RESEARCHER                    [Temp: 0.2]    │
 │  ─────────────────────────────────────────────────────────────  │
-│  Queries live OpenWeatherMap & TheNewsAPI data.                  │
+│  Queries live WeatherAPI.com & TheNewsAPI data.                  │
 │  Uses SEMANTIC product strings (e.g., "umbrellas",              │
 │  not "Item 1") for highly relevant news retrieval.              │
 │  Output: Contextual risk/opportunity summary.                   │
@@ -223,7 +223,7 @@ Get the entire platform running locally in **3 steps**.
 ### Prerequisites
 
 - [Docker Desktop](https://www.docker.com/products/docker-desktop/) installed and running
-- API keys for: [Google AI Studio](https://aistudio.google.com/apikey), [OpenWeatherMap](https://openweathermap.org/api), [TheNewsAPI](https://www.thenewsapi.com/)
+- API keys for: [Google AI Studio](https://aistudio.google.com/apikey), [WeatherAPI.com](https://www.weatherapi.com/), [TheNewsAPI](https://www.thenewsapi.com/)
 
 ### Step 1: Configure Environment
 
@@ -285,7 +285,7 @@ multimodal_demand_forecaster/
 │   ├── models.py               # SQLAlchemy ORM — Products, Sales, Forecasts
 │   ├── database.py             # PostgreSQL engine & session management
 │   ├── auth.py                 # JWT authentication & merchant management
-│   ├── weather_api.py          # OpenWeatherMap integration
+│   ├── weather_api.py          # WeatherAPI.com integration
 │   ├── news_api.py             # TheNewsAPI integration
 │   ├── requirements.txt        # Python dependencies
 │   └── Dockerfile              # Backend container image
