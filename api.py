@@ -71,9 +71,13 @@ async def add_process_time_header(request: Request, call_next):
     response = await call_next(request)
     return response
 
+# Production-grade CORS
+frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
+origins = [url.strip() for url in frontend_url.split(",")]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=origins,
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -228,12 +232,12 @@ async def upload_data(
         unique_products = df.groupby("item").first()
         
         for p_id_raw, row in unique_products.iterrows():
-            p_id_int = int(p_id_raw)
-            p_name = str(row.get("item_name", f"Product {p_id_int}"))
+            p_id_str = str(p_id_raw)
+            p_name = str(row.get("item_name", f"Product {p_id_str}"))
             
-            prod = db.query(Product).filter(Product.item_id == p_id_int, Product.merchant_id == current_merchant.id).first()
+            prod = db.query(Product).filter(Product.item_id == p_id_str, Product.merchant_id == current_merchant.id).first()
             if not prod:
-                prod = Product(item_id=p_id_int, name=p_name, merchant_id=current_merchant.id)
+                prod = Product(item_id=p_id_str, name=p_name, merchant_id=current_merchant.id)
                 db.add(prod)
                 db.commit()
                 db.refresh(prod)
@@ -243,7 +247,7 @@ async def upload_data(
                     prod.name = p_name
                     db.commit()
             
-            product_map[p_id_int] = prod.id
+            product_map[p_id_str] = prod.id
             
         # Clear existing historical sales for these products to prevent duplicates
         for p_id in product_map.values():
@@ -256,7 +260,7 @@ async def upload_data(
             sales_records.append(
                 HistoricalSale(
                     store_id=row["store"],
-                    product_id=product_map[int(row["item"])],
+                    product_id=product_map[str(row["item"])],
                     date=row["date"].date(),
                     sales=row["sales"]
                 )
@@ -274,7 +278,7 @@ async def upload_data(
 async def train_async(
     request: Request,
     store: int = Form(...),
-    item: int = Form(...),
+    item: str = Form(...),
     db: Session = Depends(get_db),
     current_merchant: Merchant = Depends(get_current_merchant)
 ):

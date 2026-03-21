@@ -9,6 +9,8 @@ load_dotenv()
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage
+from langchain_core.callbacks import StdOutCallbackHandler
+from tenacity import retry, wait_exponential, stop_after_attempt
 from datetime import date
 
 # Initialize Gemini models via LangChain
@@ -30,7 +32,7 @@ auditor_llm = ChatGoogleGenerativeAI(
     temperature=0.0 # Strict deterministic checking
 )
 
-# OpenRouter Fallback Models
+# OpenRouter Fallback Models (Free Tier)
 openrouter_kwargs = {
     "base_url": "https://openrouter.ai/api/v1",
     "api_key": os.getenv("OPENROUTER_API_KEY"),
@@ -46,11 +48,16 @@ safe_llm = llm.with_fallbacks([fallback_llm])
 safe_drafter = drafter_llm.with_fallbacks([fallback_drafter])
 safe_auditor = auditor_llm.with_fallbacks([fallback_auditor])
 
+@retry(wait=wait_exponential(multiplier=1, min=4, max=10), stop=stop_after_attempt(3))
 def run_verification_pipeline(forecast_summary: dict, weather_text: str, news_text: str) -> str:
     """
-    Executes the 4-Agent Actor-Critic verification pipeline.
+    Executes the 4-Agent Actor-Critic verification pipeline with observability and retries.
     """
     print("--- Starting Multi-Agent Pipeline ---")
+    
+    # Observability: Initialize basic callback handler
+    # Note: In a real production env, this would be Langfuse or LangSmith
+    config = {"callbacks": [StdOutCallbackHandler()]}
     
     # --- Agent 1: Data Analyst ---
     print("Agent 1: Data Analyst running...")
@@ -66,8 +73,7 @@ def run_verification_pipeline(forecast_summary: dict, weather_text: str, news_te
     
     IMPORTANT: Explicitly identify the PEAK (Maximum) forecasted value in your summary.
     """
-    analyst_output = safe_llm.invoke([HumanMessage(content=analyst_prompt)]).content
-    time.sleep(5) # Prevent burst limit on free tier where possible
+    analyst_output = safe_llm.invoke([HumanMessage(content=analyst_prompt)], config=config).content
     
     # --- Agent 2: Context Researcher ---
     print("Agent 2: Context Researcher running...")
@@ -83,8 +89,7 @@ def run_verification_pipeline(forecast_summary: dict, weather_text: str, news_te
     News:
     {news_text}
     """
-    researcher_output = safe_llm.invoke([HumanMessage(content=researcher_prompt)]).content
-    time.sleep(5)
+    researcher_output = safe_llm.invoke([HumanMessage(content=researcher_prompt)], config=config).content
     
     # --- Agent 3: Supply Chain Director (Drafter) ---
     print("Agent 3: Supply Chain Director drafting report...")
@@ -110,8 +115,7 @@ def run_verification_pipeline(forecast_summary: dict, weather_text: str, news_te
     
     RETURN ONLY THE MARKDOWN REPORT. No introductory or concluding remarks.
     """
-    draft_report = safe_drafter.invoke([HumanMessage(content=drafter_prompt)]).content
-    time.sleep(5)
+    draft_report = safe_drafter.invoke([HumanMessage(content=drafter_prompt)], config=config).content
     
     # --- Agent 4: QA Auditor (Critic) ---
     print("Agent 4: QA Auditor verifying...")
@@ -132,7 +136,7 @@ def run_verification_pipeline(forecast_summary: dict, weather_text: str, news_te
     
     RETURN ONLY THE FINAL APPROVED MARKDOWN TEXT. Do not add conversational filler like "Here is the rewritten report".
     """
-    final_verified_report = safe_auditor.invoke([HumanMessage(content=auditor_prompt)]).content
+    final_verified_report = safe_auditor.invoke([HumanMessage(content=auditor_prompt)], config=config).content
     
     print("--- Pipeline Complete ---")
     return final_verified_report.strip()

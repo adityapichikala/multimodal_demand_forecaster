@@ -35,7 +35,7 @@ def run_async_forecast(self, store_id: int, product_pk: int):
         # Fetch product to log item_id
         from models import Product
         prod = db.query(Product).filter(Product.id == product_pk).first()
-        item_id = prod.item_id if prod else product_pk
+        item_id = str(prod.item_id) if prod else str(product_pk)
 
         # Format into Pandas DataFrame for Prophet
         df = pd.DataFrame([{"date": s.date, "store": s.store_id, "item": item_id, "sales": s.sales} for s in sales])

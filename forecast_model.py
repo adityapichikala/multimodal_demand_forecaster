@@ -17,7 +17,7 @@ warnings.filterwarnings("ignore")
 MAX_TRAINING_ROWS = 5_000   # Memory safeguard: cap rows to prevent OOM on Cloud Run
 
 
-def run_forecast(df: pd.DataFrame, store: int, item: int, periods: int = 7) -> dict:
+def run_forecast(df: pd.DataFrame, store: int, item: str, periods: int = 7) -> dict:
     """
     Train a Prophet model on the uploaded CSV data and forecast `periods` days ahead.
     Called on every user request — no caching or model persistence.
@@ -26,7 +26,7 @@ def run_forecast(df: pd.DataFrame, store: int, item: int, periods: int = 7) -> d
     ----------
     df      : DataFrame with columns [date, store, item, sales]
     store   : store ID to filter on
-    item    : item ID to filter on
+    item    : item ID to filter on (semantic string)
     periods : number of future days to predict (default 7)
 
     Returns
@@ -45,7 +45,7 @@ def run_forecast(df: pd.DataFrame, store: int, item: int, periods: int = 7) -> d
     df["date"] = pd.to_datetime(df["date"])
 
     # ── Filter by store and item ──────────────────────────────────────────────
-    filtered = df[(df["store"] == int(store)) & (df["item"] == int(item))].copy()
+    filtered = df[(df["store"] == int(store)) & (df["item"].astype(str) == str(item))].copy()
     if filtered.empty:
         raise ValueError(f"No data found for store={store}, item={item}")
 

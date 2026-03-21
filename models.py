@@ -17,7 +17,7 @@ class Product(Base):
     __tablename__ = "products"
 
     id = Column(Integer, primary_key=True, index=True)
-    item_id = Column(Integer, index=True)
+    item_id = Column(String, index=True)
     name = Column(String, index=True)
     merchant_id = Column(Integer, ForeignKey("merchants.id"))
     
