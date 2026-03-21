@@ -14,7 +14,7 @@ export default function Dashboard() {
   
   // Available Meta State
   const [availableStores, setAvailableStores] = useState<number[]>([]);
-  const [availableItems, setAvailableItems] = useState<number[]>([]);
+  const [availableItems, setAvailableItems] = useState<{id: number, name: string}[]>([]);
   
   const [taskStatus, setTaskStatus] = useState<any>(null);
   const [report, setReport] = useState<string | null>(null);
@@ -23,11 +23,17 @@ export default function Dashboard() {
   
   // Upload state
   const [file, setFile] = useState<File | null>(null);
+  const [clearExisting, setClearExisting] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadMsg, setUploadMsg] = useState('');
 
+  // History state
+  const [history, setHistory] = useState<any[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+
   // Poll for Celery Worker status
   useEffect(() => {
+    fetchHistory();
     let interval: NodeJS.Timeout;
     
     const checkStatus = async () => {
@@ -63,10 +69,25 @@ export default function Dashboard() {
       const res = await fetchWithAuth('/dashboard-meta');
       if (res.ok) {
         const data = await res.json();
-        setAvailableStores(data.stores || []);
-        setAvailableItems(data.products || []);
-        if (data.stores?.length > 0 && !store) setStore(data.stores[0].toString());
-        if (data.products?.length > 0 && !item) setItem(data.products[0].toString());
+        if (!data) return;
+        
+        const stData = Array.isArray(data.stores) ? data.stores : [];
+        const prData = Array.isArray(data.products) ? data.products : [];
+        
+        setAvailableStores(stData);
+        setAvailableItems(prData);
+        
+        if (stData.length > 0 && !store) {
+          const firstStore = stData[0];
+          const stId = (firstStore && typeof firstStore === 'object') ? (firstStore.id || firstStore) : firstStore;
+          if (stId !== null && stId !== undefined) setStore(stId.toString());
+        }
+        
+        if (prData.length > 0 && !item) {
+          const firstItem = prData[0];
+          const itemId = (firstItem && typeof firstItem === 'object') ? (firstItem.id || firstItem) : firstItem;
+          if (itemId !== null && itemId !== undefined) setItem(itemId.toString());
+        }
       }
     } catch(e) {
       console.error(e);
@@ -92,6 +113,7 @@ export default function Dashboard() {
     try {
       const formData = new FormData();
       formData.append('csv_file', file);
+      formData.append('clear_all', String(clearExisting));
       
       const res = await fetchWithAuth('/upload-data', {
         method: 'POST',
@@ -155,9 +177,43 @@ export default function Dashboard() {
       
       setReport(data.gemini_report);
       setTaskStatus((prev: any) => ({ ...prev, task_status: 'COMPLETE' }));
+      fetchHistory(); // Refresh history list
     } catch (err: any) {
       setError(err.message);
       setTaskStatus((prev: any) => ({ ...prev, task_status: 'ERROR' }));
+    }
+  };
+
+  const fetchHistory = async () => {
+    setLoadingHistory(true);
+    try {
+      const res = await fetchWithAuth('/forecast-history');
+      if (res.ok) {
+        const data = await res.json();
+        setHistory(data);
+      }
+    } catch (e) {
+      console.error('Failed to fetch history:', e);
+    } finally {
+      setLoadingHistory(false);
+    }
+  };
+
+  const loadPastForecast = async (id: number) => {
+    setTaskStatus({ task_status: 'LOADING_PAST' });
+    setReport(null);
+    try {
+      const res = await fetchWithAuth(`/forecast/${id}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Failed to load forecast');
+      
+      setStore(String(data.store_id));
+      setItem(String(data.product_id));
+      setReport(data.gemini_report);
+      setTaskStatus({ task_status: 'COMPLETE' });
+    } catch (err: any) {
+      setError(err.message);
+      setTaskStatus(null);
     }
   };
 
@@ -197,7 +253,7 @@ export default function Dashboard() {
                 <div className="flex items-center space-x-3">
                   <input 
                     type="file" 
-                    accept=".csv"
+                    accept=".csv,.xlsx,.xls"
                     onChange={(e) => setFile(e.target.files ? e.target.files[0] : null)}
                     className="w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-blue-900/30 file:text-blue-400 hover:file:bg-blue-900/50 cursor-pointer"
                   />
@@ -209,9 +265,65 @@ export default function Dashboard() {
                     {uploading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Upload className="w-5 h-5" />}
                   </button>
                 </div>
+                <div className="flex items-center space-x-2 mt-2">
+                  <input 
+                    type="checkbox" 
+                    id="clear_existing"
+                    checked={clearExisting}
+                    onChange={(e) => setClearExisting(e.target.checked)}
+                    className="w-4 h-4 rounded border-gray-700 bg-gray-950 text-blue-500 focus:ring-blue-500"
+                  />
+                  <label htmlFor="clear_existing" className="text-sm text-gray-400 cursor-pointer">
+                    Clear existing data history
+                  </label>
+                </div>
                 {uploadMsg && <p className="text-green-400 text-sm mt-3 flex items-center">{uploadMsg}</p>}
               </div>
             </form>
+
+            {/* History Section */}
+            <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6 shadow-sm overflow-hidden">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-bold flex items-center space-x-2">
+                  <MessageSquare className="text-blue-400 w-5 h-5" />
+                  <span>Recent Analysis</span>
+                </h2>
+                <button 
+                  onClick={fetchHistory} 
+                  disabled={loadingHistory}
+                  className="text-xs text-blue-400 hover:text-blue-300 disabled:opacity-50"
+                >
+                  {loadingHistory ? 'Refreshing...' : 'Refresh'}
+                </button>
+              </div>
+              
+              <div className="space-y-3 max-h-[350px] overflow-y-auto pr-2 custom-scrollbar">
+                {loadingHistory && history.length === 0 ? (
+                    <div className="flex justify-center py-4"><Loader2 className="w-6 h-6 animate-spin text-gray-500" /></div>
+                ) : history.length === 0 ? (
+                    <p className="text-sm text-gray-500 text-center py-4 italic">No past forecasts found.</p>
+                ) : (
+                  history.map((h) => (
+                    <button 
+                      key={h.id}
+                      onClick={() => loadPastForecast(h.id)}
+                      className="w-full text-left p-3 rounded-xl bg-gray-950/50 border border-gray-800 hover:border-blue-500/50 hover:bg-blue-900/10 transition-all group"
+                    >
+                      <div className="flex justify-between items-start mb-1">
+                        <span className="text-xs font-semibold text-blue-400 group-hover:text-blue-300 transition-colors uppercase tracking-wider">{h.product_name}</span>
+                        <span className="text-[10px] text-gray-600 font-mono">{new Date(h.created_at).toLocaleDateString()}</span>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <span className="bg-gray-800 text-gray-400 text-[9px] px-1.5 py-0.5 rounded uppercase font-bold">Store {h.store_id}</span>
+                        <span className={`text-[9px] font-medium ${h.has_report ? 'text-green-500/80' : 'text-yellow-500/80'}`}>
+                          {h.has_report ? '• Report Ready' : '• Incomplete'}
+                        </span>
+                      </div>
+                    </button>
+                  ))
+                )}
+              </div>
+            </div>
 
             <h2 className="text-lg font-semibold text-white mb-6 flex items-center">
               <PackageSearch className="w-5 h-5 mr-2 text-indigo-400" />
@@ -228,13 +340,16 @@ export default function Dashboard() {
                   {availableStores.length === 0 ? (
                     <option value="" disabled>No data uploaded</option>
                   ) : (
-                    availableStores.map(n => <option key={n} value={n}>Store #{n}</option>)
+                    availableStores.map((n: any) => {
+                      const val = (n && typeof n === 'object') ? (n.id || n) : n;
+                      return <option key={String(val)} value={String(val)}>{String(val)}</option>;
+                    })
                   )}
                 </select>
               </div>
 
               <div>
-                <label className="block text-sm text-gray-400 mb-2">Product ID</label>
+                <label className="block text-sm text-gray-400 mb-2">Product</label>
                 <select 
                   value={item} onChange={e => setItem(e.target.value)}
                   className="w-full bg-gray-950 border border-gray-700 rounded-lg px-4 py-2.5 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all text-white outline-none"
@@ -242,7 +357,17 @@ export default function Dashboard() {
                   {availableItems.length === 0 ? (
                     <option value="" disabled>No data uploaded</option>
                   ) : (
-                    availableItems.map(n => <option key={n} value={n}>Item #{n}</option>)
+                    availableItems.map((p: any) => {
+                      const id = (p && typeof p === 'object') ? p.id : p;
+                      const name = (p && typeof p === 'object') ? p.name : String(id);
+                      const displayId = String(id);
+                      const displayName = String(name);
+                      return (
+                        <option key={displayId} value={displayId}>
+                          {displayName}
+                        </option>
+                      );
+                    })
                   )}
                 </select>
               </div>

@@ -16,7 +16,7 @@ import datetime
 import pandas as pd
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile, Depends, Request
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile, Depends, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.security import OAuth2PasswordRequestForm
@@ -63,9 +63,18 @@ app = FastAPI(
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
+@app.middleware("http")
+async def add_process_time_header(request: Request, call_next):
+    print(f"DEBUG: Incoming {request.method} request to {request.url}")
+    print(f"DEBUG: Origin: {request.headers.get('origin')}")
+    print(f"DEBUG: Auth: {request.headers.get('authorization')[:20] if request.headers.get('authorization') else 'None'}")
+    response = await call_next(request)
+    return response
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -113,21 +122,79 @@ def health_check():
 
 # ─── Dashboard Meta ────────────────────────────────────────────────────────────
 @app.get("/dashboard-meta")
-async def get_dashboard_meta(db: Session = Depends(get_db), current_merchant: Merchant = Depends(get_current_merchant)):
-    products = db.query(Product.item_id).filter(Product.merchant_id == current_merchant.id).distinct().all()
-    pr_ids = sorted([p[0] for p in products])
+async def get_dashboard_meta(response: Response, db: Session = Depends(get_db), current_merchant: Merchant = Depends(get_current_merchant)):
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    # Fetch distinct products that actually HAVE sales data for this merchant
+    products = db.query(Product.item_id, Product.name).join(HistoricalSale, Product.id == HistoricalSale.product_id).filter(Product.merchant_id == current_merchant.id).distinct().all()
+    
+    # Format as a list of dictionaries
+    pr_list = [{"id": p.item_id, "name": p.name} for p in products]
+    pr_list = sorted(pr_list, key=lambda x: x["id"])
 
+    # Fetch distinct stores that actually HAVE sales data for this merchant
     stores = db.query(HistoricalSale.store_id).join(Product, HistoricalSale.product_id == Product.id).filter(Product.merchant_id == current_merchant.id).distinct().all()
     st_ids = sorted([s[0] for s in stores])
 
-    return {"stores": st_ids, "products": pr_ids}
+    return {"products": pr_list, "stores": st_ids}
+
+# ─── Forecast History ────────────────────────────────────────────────────────
+@app.get("/forecast-history")
+async def get_forecast_history(
+    db: Session = Depends(get_db), 
+    current_merchant: Merchant = Depends(get_current_merchant)
+):
+    """
+    Retrieves all past forecasts for the current merchant, ordered by date.
+    """
+    forecasts = db.query(models.Forecast).join(models.Product).filter(
+        models.Product.merchant_id == current_merchant.id
+    ).order_by(models.Forecast.forecast_date.desc()).all()
+    
+    return [
+        {
+            "id": f.id,
+            "created_at": f.created_at.isoformat(),
+            "store_id": f.store_id,
+            "product_name": f.product.name,
+            "product_id": f.product.item_id,
+            "summary": f.forecast_data.get("summary") if f.forecast_data else None,
+            "has_report": f.gemini_report is not None
+        } for f in forecasts
+    ]
+
+@app.get("/forecast/{forecast_id}")
+async def get_forecast_detail(
+    forecast_id: int,
+    db: Session = Depends(get_db),
+    current_merchant: Merchant = Depends(get_current_merchant)
+):
+    """
+    Retrieves the full detail of a specific forecast.
+    """
+    forecast = db.query(models.Forecast).filter(models.Forecast.id == forecast_id).first()
+    if not forecast:
+        raise HTTPException(status_code=404, detail="Forecast not found")
+        
+    if forecast.product.merchant_id != current_merchant.id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+        
+    return {
+        "id": forecast.id,
+        "created_at": forecast.created_at.isoformat(),
+        "store_id": forecast.store_id,
+        "product_name": forecast.product.name,
+        "product_id": forecast.product.item_id,
+        "summary": forecast.forecast_data.get("summary") if forecast.forecast_data else None,
+        "gemini_report": forecast.gemini_report
+    }
 
 # ─── Stage 1a: Upload Data ───────────────────────────────────────────────────
 @app.post("/upload-data")
 @limiter.limit("5/minute")
 async def upload_data(
     request: Request,
-    csv_file: UploadFile = File(..., description="CSV with columns: date, store, item, sales"),
+    csv_file: UploadFile = File(..., description="CSV or Excel file"),
+    clear_all: bool = Form(False),
     db: Session = Depends(get_db),
     current_merchant: Merchant = Depends(get_current_merchant)
 ):
@@ -135,20 +202,47 @@ async def upload_data(
     Ingests CSV data into the PostgreSQL HistoricalSale table.
     """
     try:
+        if clear_all:
+            # Wipe everything for this merchant
+            # Delete Forecasts
+            db.query(models.Forecast).filter(models.Forecast.product_id.in_(db.query(models.Product.id).filter(models.Product.merchant_id == current_merchant.id))).delete(synchronize_session=False)
+            # Delete Historical Sales
+            db.query(models.HistoricalSale).filter(models.HistoricalSale.product_id.in_(db.query(models.Product.id).filter(models.Product.merchant_id == current_merchant.id))).delete(synchronize_session=False)
+            # Delete Products
+            db.query(models.Product).filter(models.Product.merchant_id == current_merchant.id).delete()
+            db.commit()
+
         contents = await csv_file.read()
-        df = pd.read_csv(io.BytesIO(contents), parse_dates=["date"])
+        filename = csv_file.filename.lower()
         
-        # Ensure products exist for relational integrity
-        product_items = df["item"].unique()
+        if filename.endswith(".csv"):
+            df = pd.read_csv(io.BytesIO(contents), parse_dates=["date"])
+        elif filename.endswith(".xlsx") or filename.endswith(".xls"):
+            df = pd.read_excel(io.BytesIO(contents), parse_dates=["date"])
+        else:
+            raise HTTPException(status_code=400, detail="Unsupported file format. Please upload CSV or Excel.")
+        
+        # Ensure products exist for relational integrity, using names from the data if available
         product_map = {}
-        for p_id in product_items:
-            p_id_int = int(p_id)
+        # Get first occurrence of each item to extract name
+        unique_products = df.groupby("item").first()
+        
+        for p_id_raw, row in unique_products.iterrows():
+            p_id_int = int(p_id_raw)
+            p_name = str(row.get("item_name", f"Product {p_id_int}"))
+            
             prod = db.query(Product).filter(Product.item_id == p_id_int, Product.merchant_id == current_merchant.id).first()
             if not prod:
-                prod = Product(item_id=p_id_int, name=f"Product {p_id_int}", merchant_id=current_merchant.id)
+                prod = Product(item_id=p_id_int, name=p_name, merchant_id=current_merchant.id)
                 db.add(prod)
                 db.commit()
                 db.refresh(prod)
+            else:
+                # Always sync name with the latest uploaded dataset
+                if p_name and p_name != prod.name:
+                    prod.name = p_name
+                    db.commit()
+            
             product_map[p_id_int] = prod.id
             
         # Clear existing historical sales for these products to prevent duplicates

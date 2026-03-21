@@ -73,6 +73,12 @@ def run_forecast(df: pd.DataFrame, store: int, item: int, periods: int = 7) -> d
     # ── Forecast ──────────────────────────────────────────────────────────────
     future   = model.make_future_dataframe(periods=periods)
     forecast = model.predict(future)
+    
+    # ── Non-Negative Constraint ──────────────────────────────────────────────
+    # Prophet is mathematical and can sometimes predict negative values on 
+    # sharp downward trends. We clip these to zero for retail logic.
+    for col in ["yhat", "yhat_lower", "yhat_upper"]:
+        forecast[col] = forecast[col].clip(lower=0)
 
     # ── Build summary ─────────────────────────────────────────────────────────
     future_forecast = forecast.tail(periods)
