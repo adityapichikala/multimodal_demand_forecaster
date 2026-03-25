@@ -369,7 +369,7 @@ This project is licensed under the **MIT License** — see the [LICENSE](LICENSE
 
 <div align="center">
 
-**Built with ❤️ as a capstone project demonstrating production-grade AI engineering.**
+**Built with ❤️ demonstrating production-grade AI engineering.**
 
 _If this project helped you, consider giving it a ⭐_
 
