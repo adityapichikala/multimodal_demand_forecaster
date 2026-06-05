@@ -43,8 +43,13 @@ from database import engine, Base, get_db
 import models
 from sqlalchemy.orm import Session
 
+MAX_UPLOAD_SIZE_BYTES = 10 * 1024 * 1024  # 10 MB
+REQUIRED_CSV_COLUMNS = {"date", "store", "item", "sales"}
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Auto-create database tables if they don't exist (safe for first-time setup)
+    Base.metadata.create_all(bind=engine)
     # Initialize Redis Cache
     redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
     r = redis_async.from_url(redis_url, encoding="utf8", decode_responses=True)
@@ -175,12 +180,12 @@ async def get_forecast_detail(
     """
     Retrieves the full detail of a specific forecast.
     """
-    forecast = db.query(models.Forecast).filter(models.Forecast.id == forecast_id).first()
+    forecast = db.query(models.Forecast).join(models.Product).filter(
+        models.Forecast.id == forecast_id,
+        models.Product.merchant_id == current_merchant.id
+    ).first()
     if not forecast:
         raise HTTPException(status_code=404, detail="Forecast not found")
-        
-    if forecast.product.merchant_id != current_merchant.id:
-        raise HTTPException(status_code=403, detail="Not authorized")
         
     return {
         "id": forecast.id,
@@ -217,6 +222,14 @@ async def upload_data(
             db.commit()
 
         contents = await csv_file.read()
+
+        # Guard against oversized uploads to prevent memory exhaustion
+        if len(contents) > MAX_UPLOAD_SIZE_BYTES:
+            raise HTTPException(
+                status_code=413,
+                detail=f"File too large. Maximum upload size is {MAX_UPLOAD_SIZE_BYTES // (1024*1024)} MB."
+            )
+
         filename = csv_file.filename.lower()
         
         if filename.endswith(".csv"):
@@ -225,6 +238,15 @@ async def upload_data(
             df = pd.read_excel(io.BytesIO(contents), parse_dates=["date"])
         else:
             raise HTTPException(status_code=400, detail="Unsupported file format. Please upload CSV or Excel.")
+
+        # Validate required columns exist before processing
+        actual_columns = set(df.columns.str.lower())
+        missing = REQUIRED_CSV_COLUMNS - actual_columns
+        if missing:
+            raise HTTPException(
+                status_code=400,
+                detail=f"CSV is missing required columns: {missing}. Expected: {REQUIRED_CSV_COLUMNS}"
+            )
         
         # Ensure products exist for relational integrity, using names from the data if available
         product_map = {}
@@ -332,12 +354,12 @@ async def analyze(
     Fetches forecast data from DB using forecast_id, fetches weather + news,
     and sends everything to the Multi-Agent Verification Pipeline.
     """
-    forecast = db.query(models.Forecast).filter(models.Forecast.id == forecast_id).first()
+    forecast = db.query(models.Forecast).join(models.Product).filter(
+        models.Forecast.id == forecast_id,
+        models.Product.merchant_id == current_merchant.id
+    ).first()
     if not forecast:
         raise HTTPException(status_code=404, detail="Forecast not found")
-        
-    if forecast.product.merchant_id != current_merchant.id:
-        raise HTTPException(status_code=403, detail="Not authorized to access this forecast")
         
     summary = forecast.forecast_data.get("summary") if forecast.forecast_data else {}
 
