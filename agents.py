@@ -17,19 +17,19 @@ from datetime import date
 llm = ChatGoogleGenerativeAI(
     model="gemini-2.0-flash",
     google_api_key=os.getenv("GEMINI_API_KEY"),
-    temperature=0.2 # low temperature for more deterministic analysis
+    temperature=0.2,  # low temperature for more deterministic analysis
 )
 
 drafter_llm = ChatGoogleGenerativeAI(
     model="gemini-2.0-flash",
     google_api_key=os.getenv("GEMINI_API_KEY"),
-    temperature=0.5 # slightly higher for drafting a narrative
+    temperature=0.5,  # slightly higher for drafting a narrative
 )
 
 auditor_llm = ChatGoogleGenerativeAI(
     model="gemini-2.0-flash",
     google_api_key=os.getenv("GEMINI_API_KEY"),
-    temperature=0.0 # Strict deterministic checking
+    temperature=0.0,  # Strict deterministic checking
 )
 
 # OpenRouter Fallback Models (Free Tier)
@@ -48,17 +48,20 @@ safe_llm = llm.with_fallbacks([fallback_llm])
 safe_drafter = drafter_llm.with_fallbacks([fallback_drafter])
 safe_auditor = auditor_llm.with_fallbacks([fallback_auditor])
 
+
 @retry(wait=wait_exponential(multiplier=1, min=4, max=10), stop=stop_after_attempt(3))
-def run_verification_pipeline(forecast_summary: dict, weather_text: str, news_text: str) -> str:
+def run_verification_pipeline(
+    forecast_summary: dict, weather_text: str, news_text: str
+) -> str:
     """
     Executes the 4-Agent Actor-Critic verification pipeline with observability and retries.
     """
     print("--- Starting Multi-Agent Pipeline ---")
-    
+
     # Observability: Initialize basic callback handler
     # Note: In a real production env, this would be Langfuse or LangSmith
     config = {"callbacks": [StdOutCallbackHandler()]}
-    
+
     # --- Agent 1: Data Analyst ---
     print("Agent 1: Data Analyst running...")
     analyst_prompt = f"""
@@ -73,8 +76,10 @@ def run_verification_pipeline(forecast_summary: dict, weather_text: str, news_te
     
     IMPORTANT: Explicitly identify the PEAK (Maximum) forecasted value in your summary.
     """
-    analyst_output = safe_llm.invoke([HumanMessage(content=analyst_prompt)], config=config).content
-    
+    analyst_output = safe_llm.invoke(
+        [HumanMessage(content=analyst_prompt)], config=config
+    ).content
+
     # --- Agent 2: Context Researcher ---
     print("Agent 2: Context Researcher running...")
     researcher_prompt = f"""
@@ -89,8 +94,10 @@ def run_verification_pipeline(forecast_summary: dict, weather_text: str, news_te
     News:
     {news_text}
     """
-    researcher_output = safe_llm.invoke([HumanMessage(content=researcher_prompt)], config=config).content
-    
+    researcher_output = safe_llm.invoke(
+        [HumanMessage(content=researcher_prompt)], config=config
+    ).content
+
     # --- Agent 3: Supply Chain Director (Drafter) ---
     print("Agent 3: Supply Chain Director drafting report...")
     drafter_prompt = f"""
@@ -115,8 +122,10 @@ def run_verification_pipeline(forecast_summary: dict, weather_text: str, news_te
     
     RETURN ONLY THE MARKDOWN REPORT. No introductory or concluding remarks.
     """
-    draft_report = safe_drafter.invoke([HumanMessage(content=drafter_prompt)], config=config).content
-    
+    draft_report = safe_drafter.invoke(
+        [HumanMessage(content=drafter_prompt)], config=config
+    ).content
+
     # --- Agent 4: QA Auditor (Critic) ---
     print("Agent 4: QA Auditor verifying...")
     auditor_prompt = f"""
@@ -136,7 +145,9 @@ def run_verification_pipeline(forecast_summary: dict, weather_text: str, news_te
     
     RETURN ONLY THE FINAL APPROVED MARKDOWN TEXT. Do not add conversational filler like "Here is the rewritten report".
     """
-    final_verified_report = safe_auditor.invoke([HumanMessage(content=auditor_prompt)], config=config).content
-    
+    final_verified_report = safe_auditor.invoke(
+        [HumanMessage(content=auditor_prompt)], config=config
+    ).content
+
     print("--- Pipeline Complete ---")
     return final_verified_report.strip()

@@ -18,7 +18,8 @@ BASE_URL = "https://api.weatherapi.com/v1/forecast.json"
 
 from fastapi_cache.decorator import cache
 
-@cache(expire=10800) # 3 hours
+
+@cache(expire=10800)  # 3 hours
 async def get_weather_summary(city: str = "New York") -> str:
     """
     Fetch a 5-day weather forecast for the given city from WeatherAPI.com
@@ -64,16 +65,16 @@ async def get_weather_summary(city: str = "New York") -> str:
     for day in forecasts:
         date = day.get("date", "")
         day_data = day.get("day", {})
-        
+
         max_temp = day_data.get("maxtemp_c", 0)
         min_temp = day_data.get("mintemp_c", 0)
         desc = day_data.get("condition", {}).get("text", "Unknown")
         max_wind = day_data.get("maxwind_kph", 0)
-        
+
         temps_max.append(max_temp)
         temps_min.append(min_temp)
         conditions.append(desc)
-        
+
         lines.append(
             f"  • {date} | High: {max_temp}°C | Low: {min_temp}°C | "
             f"Wind max: {max_wind} km/h | {desc}"
@@ -87,14 +88,18 @@ async def get_weather_summary(city: str = "New York") -> str:
 
     # Process alerts mapping from WeatherAPI
     api_alerts = data.get("alerts", {}).get("alert", [])
-    
+
     heuristics_alerts = []
     if max(temps_max) > 35:
-        heuristics_alerts.append("⚠️  HEAT ALERT: Temperatures exceeding 35°C expected.")
+        heuristics_alerts.append(
+            "⚠️  HEAT ALERT: Temperatures exceeding 35°C expected."
+        )
     if min(temps_min) < 0:
         heuristics_alerts.append("⚠️  COLD ALERT: Sub-zero temperatures expected.")
     if any("storm" in c.lower() or "thunder" in c.lower() for c in conditions):
-        heuristics_alerts.append("⚠️  STORM ALERT: Thunderstorms/storms in the forecast.")
+        heuristics_alerts.append(
+            "⚠️  STORM ALERT: Thunderstorms/storms in the forecast."
+        )
     if any("heavy rain" in c.lower() for c in conditions):
         heuristics_alerts.append("⚠️  HEAVY RAIN: Possible supply chain disruptions.")
 

@@ -4,6 +4,7 @@ test_e2e.py
 End-to-end integration test for the v2 Enterprise Pipeline.
 Tests the full flow: Register → Login → Upload CSV → Train Async → Poll → Analyze
 """
+
 import os
 import time
 import requests
@@ -17,19 +18,26 @@ TEST_PASSWORD = "supersecretpassword"
 
 # ─── Helpers ─────────────────────────────────────────────────────────────────
 
+
 def get_token(session: requests.Session) -> str:
     # Try to register first (idempotent: ignore 400 if already exists)
-    session.post(f"{API_URL}/register", data={
-        "email": TEST_EMAIL, "password": TEST_PASSWORD, "name": "E2E Test Merchant"
-    })
-    resp = session.post(f"{API_URL}/token", data={
-        "username": TEST_EMAIL, "password": TEST_PASSWORD
-    })
+    session.post(
+        f"{API_URL}/register",
+        data={
+            "email": TEST_EMAIL,
+            "password": TEST_PASSWORD,
+            "name": "E2E Test Merchant",
+        },
+    )
+    resp = session.post(
+        f"{API_URL}/token", data={"username": TEST_EMAIL, "password": TEST_PASSWORD}
+    )
     assert resp.status_code == 200, f"Login failed: {resp.text}"
     return resp.json()["access_token"]
 
 
 # ─── Tests ────────────────────────────────────────────────────────────────────
+
 
 def test_health():
     resp = requests.get(f"{API_URL}/health")
@@ -51,7 +59,7 @@ def test_full_pipeline():
             f"{API_URL}/upload-data",
             headers=headers,
             files={"csv_file": ("train.csv", f, "text/csv")},
-            timeout=60
+            timeout=60,
         )
     assert resp.status_code == 200, f"Upload failed: {resp.text}"
     assert resp.json()["success"] is True
@@ -61,7 +69,7 @@ def test_full_pipeline():
         f"{API_URL}/train-async",
         headers=headers,
         data={"store": "1", "item": "1"},
-        timeout=30
+        timeout=30,
     )
     assert resp.status_code == 202, f"train-async failed: {resp.text}"
     task_id = resp.json()["task_id"]
@@ -88,7 +96,7 @@ def test_full_pipeline():
         f"{API_URL}/analyze",
         headers=headers,
         data={"forecast_id": str(forecast_id), "city": "New York"},
-        timeout=120
+        timeout=120,
     )
     assert resp.status_code == 200, f"Analyze failed: {resp.text}"
     result = resp.json()
