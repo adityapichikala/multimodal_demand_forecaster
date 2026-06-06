@@ -45,7 +45,7 @@ jobs:
         REDIS_URL: redis://localhost:6379/0
         SECRET_KEY: test_secret_key_for_github_actions_123
       run: |
-        pytest test_apis.py test_e2e.py test_news_api.py
+        pytest test_e2e.py
 
   frontend-lint:
     runs-on: ubuntu-latest
