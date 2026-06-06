@@ -24,6 +24,7 @@ jobs:
     - name: Run Pytest (e2e tests skipped in CI)
       env:
         CI: "true"
+        SECRET_KEY: test_secret_key_for_github_actions_123
       run: pytest test_e2e.py -v
 
   frontend-lint:

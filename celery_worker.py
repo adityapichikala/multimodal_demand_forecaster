@@ -79,6 +79,6 @@ def run_async_forecast(self, store_id: int, product_pk: int):
 
     except Exception as e:
         db.rollback()
-        return {"success": False, "error": str(e)}
+        raise e
     finally:
         db.close()
