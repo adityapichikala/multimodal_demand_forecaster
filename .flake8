@@ -1,6 +1,6 @@
 [flake8]
-# Match Black's default line length so E501 and Black never conflict
-max-line-length = 88
+# Match Black's default line length; allow up to 120 for long AI prompt strings/docstrings
+max-line-length = 120
 
 # E402: module-level imports not at top — intentional in alembic env & env-setup files
 # W291/W293: trailing whitespace — Black handles these; suppress flake8 duplicates
