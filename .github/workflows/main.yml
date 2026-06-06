@@ -39,10 +39,10 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt
         pip install pytest httpx uvicorn
-    - name: Apply database migrations
+    - name: Create database tables
       env:
         DATABASE_URL: postgresql://postgres:password@localhost:5432/test_db
-      run: alembic upgrade head
+      run: python -c "import models; from database import Base, engine; Base.metadata.create_all(engine)"
     - name: Start FastAPI server
       env:
         DATABASE_URL: postgresql://postgres:password@localhost:5432/test_db
