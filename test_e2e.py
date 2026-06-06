@@ -39,6 +39,10 @@ def get_token(session: requests.Session) -> str:
 # ─── Tests ────────────────────────────────────────────────────────────────────
 
 
+@pytest.mark.skipif(
+    os.getenv("CI") == "true",
+    reason="Skipped in CI: requires a running FastAPI server on localhost:8000",
+)
 def test_health():
     resp = requests.get(f"{API_URL}/health")
     assert resp.status_code == 200
