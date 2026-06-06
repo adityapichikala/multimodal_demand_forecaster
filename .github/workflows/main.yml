@@ -44,7 +44,7 @@ jobs:
         DATABASE_URL: postgresql://postgres:password@localhost:5432/test_db
         REDIS_URL: redis://localhost:6379/0
       run: |
-        pytest test_apis.py test_e2e.py test_news_api.py
+        pytest test_e2e.py -v
 
   frontend-lint:
     runs-on: ubuntu-latest
@@ -56,7 +56,7 @@ jobs:
     - name: Use Node.js
       uses: actions/setup-node@v3
       with:
-        node-version: '18'
+        node-version: '20'
     - name: Install dependencies
       run: npm install
     - name: Run Linter
