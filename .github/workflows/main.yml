@@ -38,11 +38,30 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
-        pip install pytest httpx
+        pip install pytest httpx uvicorn
+    - name: Apply database migrations
+      env:
+        DATABASE_URL: postgresql://postgres:password@localhost:5432/test_db
+      run: alembic upgrade head
+    - name: Start FastAPI server
+      env:
+        DATABASE_URL: postgresql://postgres:password@localhost:5432/test_db
+        REDIS_URL: redis://localhost:6379/0
+        GEMINI_API_KEY: ci_dummy
+        OPENROUTER_API_KEY: ci_dummy
+        WEATHERAPI_KEY: ci_dummy
+        NEWSAPI_AI_KEY: ci_dummy
+        CI: "true"
+      run: |
+        uvicorn api:app --host 0.0.0.0 --port 8000 &
+        for i in $(seq 1 30); do
+          curl -sf http://localhost:8000/health && echo "Server ready" && break || sleep 1
+        done
     - name: Run Pytest
       env:
         DATABASE_URL: postgresql://postgres:password@localhost:5432/test_db
         REDIS_URL: redis://localhost:6379/0
+        CI: "true"
       run: |
         pytest test_e2e.py -v
 

@@ -45,6 +45,10 @@ def test_health():
     assert resp.json()["status"] == "ok"
 
 
+@pytest.mark.skipif(
+    os.getenv("CI") == "true",
+    reason="Skipped in CI: requires a running Celery worker and real external API keys",
+)
 def test_full_pipeline():
     session = requests.Session()
 
