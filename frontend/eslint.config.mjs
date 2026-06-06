@@ -13,13 +13,16 @@ const eslintConfig = defineConfig([
     "build/**",
     "next-env.d.ts",
   ]),
+  // Project-level rule overrides:
+  // `any` is intentional in several API response handlers — treat as warning
+  // so contributors are informed but CI is not blocked.
   {
     rules: {
-      "@typescript-eslint/no-explicit-any": "off",
-      "react-hooks/exhaustive-deps": "off",
-      "@typescript-eslint/no-unused-vars": "warn"
-    }
-  }
+      "@typescript-eslint/no-explicit-any": "warn",
+      "@typescript-eslint/no-unused-vars": "warn",
+      "react-hooks/exhaustive-deps": "warn",
+    },
+  },
 ]);
 
 export default eslintConfig;
