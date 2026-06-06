@@ -245,9 +245,9 @@ async def get_forecast_detail(
         "store_id": forecast.store_id,
         "product_name": forecast.product.name,
         "product_id": forecast.product.item_id,
-        "summary": forecast.forecast_data.get("summary")
-        if forecast.forecast_data
-        else None,
+        "summary": (
+            forecast.forecast_data.get("summary") if forecast.forecast_data else None
+        ),
         "gemini_report": forecast.gemini_report,
     }
 
