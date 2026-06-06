@@ -39,12 +39,23 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt
         pip install pytest httpx
-    - name: Run Pytest
+    - name: Run Services and Pytest
       env:
         DATABASE_URL: postgresql://postgres:password@localhost:5432/test_db
         REDIS_URL: redis://localhost:6379/0
         SECRET_KEY: test_secret_key_for_github_actions_123
       run: |
+        # Start celery worker in background
+        celery -A celery_worker.celery_app worker --loglevel=info --pool=solo &
+        # Start uvicorn API server in the background
+        uvicorn api:app --host 0.0.0.0 --port 8000 &
+        # Wait for the API server to be healthy
+        for i in {1..30}; do
+          curl -s http://localhost:8000/health && break
+          echo "Waiting for API server to start..."
+          sleep 2
+        done
+        # Run end-to-end integration tests
         pytest test_e2e.py
 
   frontend-lint:
