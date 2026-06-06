@@ -11,15 +11,17 @@ from dotenv import load_dotenv
 load_dotenv()
 
 import requests
-import json
 
 NEWSAPI_AI_KEY = os.getenv("NEWSAPI_AI_KEY", os.getenv("THENEWSAPI_KEY", ""))
 BASE_URL = "https://eventregistry.org/api/v1/article/getArticles"
 
 from fastapi_cache.decorator import cache
 
-@cache(expire=10800) # 3 hours
-async def get_news_summary(search_terms: str = "supply chain retail demand", max_articles: int = 5) -> str:
+
+@cache(expire=10800)  # 3 hours
+async def get_news_summary(
+    search_terms: str = "supply chain retail demand", max_articles: int = 5
+) -> str:
     """
     Fetch the latest news headlines matching the search terms from newsapi.ai (EventRegistry).
     """
@@ -36,20 +38,20 @@ async def get_news_summary(search_terms: str = "supply chain retail demand", max
             "articlesCount": max_articles,
             "resultType": "articles",
         }
-        
+
         # Depending on exactly which newsapi.ai endpoint, we use eventregistry.org
         response = requests.get(BASE_URL, params=params, timeout=10)
         response.raise_for_status()
         data = response.json()
-        
+
         # Check for error in JSON response structure
         if "error" in data:
             return f"[News] API Error: {data['error']}"
-            
+
     except requests.exceptions.HTTPError as e:
         status = e.response.status_code
         if status == 401 or status == 403:
-            return f"[News] Authentication failed. Please check your NEWSAPI_AI_KEY in .env (newsapi.ai)."
+            return "[News] Authentication failed. Please check your NEWSAPI_AI_KEY in .env (newsapi.ai)."
         return f"[News] Error fetching news: {e}"
     except requests.exceptions.ConnectionError:
         return "[News] Connection error. Could not reach newsapi.ai."
@@ -63,7 +65,7 @@ async def get_news_summary(search_terms: str = "supply chain retail demand", max
     lines = [f"📰 Top News Headlines (related to: {search_terms}):"]
     for i, article in enumerate(articles[:max_articles], 1):
         title = article.get("title", "No title")
-        description = article.get("body", "") # newsapi.ai returns 'body'
+        description = article.get("body", "")  # newsapi.ai returns 'body'
         source = article.get("source", {}).get("title", "Unknown source")
         published_at = article.get("dateTimePub", "")[:10]
         url = article.get("url", "")
@@ -71,7 +73,9 @@ async def get_news_summary(search_terms: str = "supply chain retail demand", max
         lines.append(f"\n  [{i}] {title}")
         if description:
             # Truncate long descriptions
-            desc_short = description[:200] + "..." if len(description) > 200 else description
+            desc_short = (
+                description[:200] + "..." if len(description) > 200 else description
+            )
             lines.append(f"      {desc_short}")
         lines.append(f"      Source: {source} | Published: {published_at}")
         if url:
@@ -80,7 +84,7 @@ async def get_news_summary(search_terms: str = "supply chain retail demand", max
     return "\n".join(lines)
 
 
-@cache(expire=10800) # 3 hours
+@cache(expire=10800)  # 3 hours
 async def get_retail_news(city: str = None, item: str = None) -> str:
     """
     Fetch news targeted at retail demand signals for a specific city/item.
