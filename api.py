@@ -484,7 +484,7 @@ async def analyze(
         ):
             raise HTTPException(
                 status_code=429,
-                detail="AI Quota Exceeded (Gemini 2.0 Flash) AND Fallback (OpenRouter) is currently overloaded globally upstream. Please wait a few minutes and try again.",
+                detail="AI Quota Exceeded (Gemini 2.0 Flash) AND Fallback (OpenRouter) is currently overloaded globally upstream. Please wait a few minutes and try again.",  # noqa: E501
             )
         raise HTTPException(status_code=500, detail=f"AI Pipeline Error: {str(e)}")
 
