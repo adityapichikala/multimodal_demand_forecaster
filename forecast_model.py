@@ -14,7 +14,7 @@ from prophet import Prophet
 
 warnings.filterwarnings("ignore")
 
-MAX_TRAINING_ROWS = 5_000   # Memory safeguard: cap rows to prevent OOM on Cloud Run
+MAX_TRAINING_ROWS = 5_000  # Memory safeguard: cap rows to prevent OOM on Cloud Run
 
 
 def run_forecast(df: pd.DataFrame, store: int, item: str, periods: int = 7) -> dict:
@@ -39,20 +39,26 @@ def run_forecast(df: pd.DataFrame, store: int, item: str, periods: int = 7) -> d
     # ── Validate columns ──────────────────────────────────────────────────────
     required = {"date", "store", "item", "sales"}
     if not required.issubset(set(df.columns.str.lower())):
-        raise ValueError(f"CSV must contain columns: {required}. Got: {list(df.columns)}")
+        raise ValueError(
+            f"CSV must contain columns: {required}. Got: {list(df.columns)}"
+        )
 
     df.columns = df.columns.str.lower()
     df["date"] = pd.to_datetime(df["date"])
 
     # ── Filter by store and item ──────────────────────────────────────────────
-    filtered = df[(df["store"] == int(store)) & (df["item"].astype(str) == str(item))].copy()
+    filtered = df[
+        (df["store"] == int(store)) & (df["item"].astype(str) == str(item))
+    ].copy()
     if filtered.empty:
         raise ValueError(f"No data found for store={store}, item={item}")
 
     filtered = filtered.sort_values("date").reset_index(drop=True)
 
     # ── Rename to Prophet format ──────────────────────────────────────────────
-    prophet_df = filtered[["date", "sales"]].rename(columns={"date": "ds", "sales": "y"})
+    prophet_df = filtered[["date", "sales"]].rename(
+        columns={"date": "ds", "sales": "y"}
+    )
 
     # ── Prophet memory spike safeguard ────────────────────────────────────────
     # Cloud Run has limited RAM. Cap training rows and use L-BFGS MAP (mcmc_samples=0)
@@ -66,16 +72,16 @@ def run_forecast(df: pd.DataFrame, store: int, item: str, periods: int = 7) -> d
         weekly_seasonality=True,
         daily_seasonality=False,
         changepoint_prior_scale=0.05,
-        mcmc_samples=0,   # L-BFGS MAP — avoids MCMC memory spikes on Cloud Run
+        mcmc_samples=0,  # L-BFGS MAP — avoids MCMC memory spikes on Cloud Run
     )
     model.fit(prophet_df)
 
     # ── Forecast ──────────────────────────────────────────────────────────────
-    future   = model.make_future_dataframe(periods=periods)
+    future = model.make_future_dataframe(periods=periods)
     forecast = model.predict(future)
-    
+
     # ── Non-Negative Constraint ──────────────────────────────────────────────
-    # Prophet is mathematical and can sometimes predict negative values on 
+    # Prophet is mathematical and can sometimes predict negative values on
     # sharp downward trends. We clip these to zero for retail logic.
     for col in ["yhat", "yhat_lower", "yhat_upper"]:
         forecast[col] = forecast[col].clip(lower=0)
@@ -85,8 +91,12 @@ def run_forecast(df: pd.DataFrame, store: int, item: str, periods: int = 7) -> d
     avg_demand = round(float(future_forecast["yhat"].mean()), 2)
     max_demand = round(float(future_forecast["yhat"].max()), 2)
     min_demand = round(float(future_forecast["yhat"].min()), 2)
-    max_day    = future_forecast.loc[future_forecast["yhat"].idxmax(), "ds"].strftime("%Y-%m-%d")
-    min_day    = future_forecast.loc[future_forecast["yhat"].idxmin(), "ds"].strftime("%Y-%m-%d")
+    max_day = future_forecast.loc[future_forecast["yhat"].idxmax(), "ds"].strftime(
+        "%Y-%m-%d"
+    )
+    min_day = future_forecast.loc[future_forecast["yhat"].idxmin(), "ds"].strftime(
+        "%Y-%m-%d"
+    )
 
     last_7_avg = float(prophet_df.tail(7)["y"].mean())
     if avg_demand > last_7_avg * 1.05:
@@ -98,20 +108,20 @@ def run_forecast(df: pd.DataFrame, store: int, item: str, periods: int = 7) -> d
 
     summary = {
         "next_7_days_avg": avg_demand,
-        "max_demand":      max_demand,
-        "min_demand":      min_demand,
-        "max_day":         max_day,
-        "min_day":         min_day,
-        "trend":           trend,
+        "max_demand": max_demand,
+        "min_demand": min_demand,
+        "max_day": max_day,
+        "min_day": min_day,
+        "trend": trend,
         "last_7_days_avg": round(last_7_avg, 2),
-        "store":           store,
-        "item":            item,
-        "forecast_dates":  future_forecast["ds"].dt.strftime("%Y-%m-%d").tolist(),
+        "store": store,
+        "item": item,
+        "forecast_dates": future_forecast["ds"].dt.strftime("%Y-%m-%d").tolist(),
         "forecast_values": [round(v, 2) for v in future_forecast["yhat"].tolist()],
     }
 
     return {
-        "forecast_df":   forecast,
+        "forecast_df": forecast,
         "historical_df": filtered,
-        "summary":       summary,
+        "summary": summary,
     }
