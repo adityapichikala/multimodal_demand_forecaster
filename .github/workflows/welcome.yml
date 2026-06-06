@@ -1,0 +1,56 @@
+name: Welcome GSSoC 2026 Contributors
+
+on:
+  pull_request:
+    types: [opened]
+
+permissions:
+  pull-requests: write
+
+jobs:
+  welcome:
+    name: Post Welcome Comment
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Comment on newly opened PR
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const { owner, repo } = context.repo;
+            const pr = context.payload.pull_request;
+            const contributor = pr.user.login;
+
+            const message = `
+            👋 **Welcome, @${contributor}! Thank you for contributing to \`multimodal_demand_forecaster\` as part of [GSSoC 2026](https://gssoc.girlscript.tech/)!** 🎉
+
+            We're thrilled to have you here. Before your PR can be reviewed and merged, please take a moment to go through the checklist below:
+
+            ---
+
+            ### ✅ Pre-Review Checklist
+
+            - [ ] 🔗 **Link your issue** – Make sure this PR references the issue it resolves (e.g., \`Closes #<issue-number>\`). PRs without a linked issue may be closed.
+            - [ ] 📖 **Read the [Contributing Guidelines](../blob/main/CONTRIBUTING.md)** – Ensure your changes follow the project's standards.
+            - [ ] 🧪 **All CI checks pass** – Verify that the lint, format, and test jobs are green.
+            - [ ] 📝 **Documentation is updated** – Add or update docstrings, comments, and the README where applicable.
+            - [ ] 💬 **Be ready to discuss your implementation** – A maintainer may ask you to walk through your changes.
+
+            ---
+
+            ### ⏳ What Happens Next?
+
+            A project admin or maintainer will review your PR shortly. Please be patient — **do not ping maintainers repeatedly** for reviews. If your PR has been open for more than **3 days** without a response, you may politely request an update.
+
+            > **Important:** PRs that do not follow the guidelines or fail CI checks will not be merged until all issues are resolved.
+
+            Happy coding, and welcome to the GSSoC 2026 community! 🚀
+            `;
+
+            await github.rest.issues.createComment({
+              owner,
+              repo,
+              issue_number: pr.number,
+              body: message.trim(),
+            });

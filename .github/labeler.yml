@@ -1,0 +1,35 @@
+# ─────────────────────────────────────────────────────────────
+# Label: frontend
+# Applied when any file inside the frontend/ directory changes.
+# ─────────────────────────────────────────────────────────────
+frontend:
+  - changed-files:
+    - any-glob-to-any-file:
+      - "frontend/**"
+
+# ─────────────────────────────────────────────────────────────
+# Label: backend
+# Applied when Python source files, API files, models, agents,
+# database config, Celery worker, or the Dockerfile change.
+# ─────────────────────────────────────────────────────────────
+backend:
+  - changed-files:
+    - any-glob-to-any-file:
+      - "**/*.py"
+      - "requirements.txt"
+      - "Dockerfile"
+      - "docker-compose.yml"
+      - "alembic/**"
+
+# ─────────────────────────────────────────────────────────────
+# Label: documentation
+# Applied when Markdown files, the LICENSE, or any file inside
+# docs/ changes.
+# ─────────────────────────────────────────────────────────────
+documentation:
+  - changed-files:
+    - any-glob-to-any-file:
+      - "**/*.md"
+      - "docs/**"
+      - "LICENSE"
+      - ".github/pull_request_template.md"
