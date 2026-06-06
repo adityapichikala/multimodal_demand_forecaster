@@ -42,10 +42,10 @@ async def get_weather_summary(city: str = "New York") -> str:
     except requests.exceptions.HTTPError as e:
         status = e.response.status_code
         if status == 401 or status == 403:
-            return f"[Weather] Authentication failed. Please check your WEATHERAPI_KEY in .env (weatherapi.com)."
+            return "[Weather] Authentication failed. Please check your WEATHERAPI_KEY in .env (weatherapi.com)."
         return f"[Weather] Error fetching data for '{city}': {e}"
     except requests.exceptions.ConnectionError:
-        return f"[Weather] Connection error. Could not reach WeatherAPI.com."
+        return "[Weather] Connection error. Could not reach WeatherAPI.com."
     except Exception as e:
         return f"[Weather] Unexpected error: {e}"
 

@@ -11,7 +11,6 @@ from dotenv import load_dotenv
 load_dotenv()
 
 import requests
-import json
 
 NEWSAPI_AI_KEY = os.getenv("NEWSAPI_AI_KEY", os.getenv("THENEWSAPI_KEY", ""))
 BASE_URL = "https://eventregistry.org/api/v1/article/getArticles"
@@ -52,7 +51,7 @@ async def get_news_summary(
     except requests.exceptions.HTTPError as e:
         status = e.response.status_code
         if status == 401 or status == 403:
-            return f"[News] Authentication failed. Please check your NEWSAPI_AI_KEY in .env (newsapi.ai)."
+            return "[News] Authentication failed. Please check your NEWSAPI_AI_KEY in .env (newsapi.ai)."
         return f"[News] Error fetching news: {e}"
     except requests.exceptions.ConnectionError:
         return "[News] Connection error. Could not reach newsapi.ai."

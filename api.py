@@ -10,9 +10,7 @@ FastAPI backend – split into two focused endpoints:
 """
 
 import io
-import json
 import os
-import datetime
 import pandas as pd
 from contextlib import asynccontextmanager
 
@@ -46,7 +44,6 @@ from auth import (
 )
 from datetime import timedelta
 
-from forecast_model import run_forecast
 from weather_api import get_weather_summary
 from news_api import get_retail_news
 from agents import run_verification_pipeline
@@ -54,7 +51,7 @@ from agents import run_verification_pipeline
 import redis.asyncio as redis_async
 from fastapi_cache import FastAPICache
 from fastapi_cache.backends.redis import RedisBackend
-from database import engine, Base, get_db
+from database import get_db
 import models
 from sqlalchemy.orm import Session
 
@@ -442,12 +439,11 @@ async def analyze(
     news_text = await get_retail_news(city=city, item=f"item {summary.get('item', '')}")
 
     # Optional image (ignored in this phase but prepared for Future Phase 4)
-    image_bytes = None
     if image_file and image_file.filename:
         try:
-            image_bytes = await image_file.read()
+            await image_file.read()
         except Exception:
-            image_bytes = None
+            pass
 
     # Call Multi-Agent Pipeline
     try:

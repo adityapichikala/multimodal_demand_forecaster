@@ -1,0 +1,16 @@
+[flake8]
+# Match Black's default line length so E501 and Black never conflict
+max-line-length = 88
+
+# E402: module-level imports not at top — intentional in alembic env & env-setup files
+# W291/W293: trailing whitespace — Black handles these; suppress flake8 duplicates
+extend-ignore = E402, W291, W293
+
+# Exclude auto-generated and third-party directories
+exclude =
+    .git,
+    __pycache__,
+    .venv,
+    venv,
+    node_modules,
+    alembic/versions/
