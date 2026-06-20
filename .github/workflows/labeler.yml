@@ -12,6 +12,7 @@ jobs:
   label:
     name: Apply Labels
     runs-on: ubuntu-latest
+    if: github.event.pull_request.head.repo.full_name == github.repository
 
     steps:
       - name: Label PR based on changed paths
