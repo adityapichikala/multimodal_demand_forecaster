@@ -57,7 +57,7 @@ async def get_weather_summary(city: str = "New York") -> str:
     if not forecasts:
         return f"[Weather] No forecast data available for {city}."
 
-    lines = [f"📍 Weather Forecast for {city_name}, {country}:"]
+    lines = [f"📍 Weather Forecast for {city_name}, {country}:"]  # noqa: E231
     temps_max = []
     temps_min = []
     conditions = []
