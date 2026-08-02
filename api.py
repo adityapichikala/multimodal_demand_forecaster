@@ -13,6 +13,7 @@ import io
 import os
 import pandas as pd
 from contextlib import asynccontextmanager
+from celery.result import AsyncResult
 
 from fastapi import (
     FastAPI,
@@ -408,26 +409,36 @@ async def train_async(
 
 @app.get("/task/{task_id}")
 @limiter.limit("30/minute")
-async def get_task_status(
-    request: Request,
-    task_id: str,
-    current_merchant: Merchant = Depends(get_current_merchant),
-):
+async def get_task_status(task_id: str):
     """
-    Polling endpoint to check if the background ML Task finished.
+    Poll Celery task status.
+    Returns explicit FAILURE state with error message when worker crashes.
+    Possible statuses: PENDING, STARTED, SUCCESS, FAILURE, REVOKED
     """
-    task_result = AsyncResult(task_id, app=celery_app)
-    result = {
+    result = AsyncResult(task_id, app=celery_app)
+
+    response = {
         "task_id": task_id,
-        "task_status": task_result.status,
+        "status": result.state,
+        "result": None,
+        "error": None,
     }
 
-    if task_result.status == "SUCCESS":
-        result["result"] = task_result.result
-    elif task_result.status == "FAILURE":
-        result["error"] = str(task_result.result)
+    if result.state == "SUCCESS":
+        response["result"] = result.result
+    elif result.state == "FAILURE":
+        # result.info holds the exception instance on FAILURE
+        error_info = result.info
+        if isinstance(error_info, Exception):
+            response["error"] = str(error_info)
+        else:
+            response["error"] = str(error_info) if error_info else "Forecasting failed unexpectedly."
+    elif result.state == "PENDING":
+        # Add elapsed time hint so frontend can decide to show a warning
+        # (task_id not found in Redis also returns PENDING — treat identically)
+        response["hint"] = "Task is queued or running. If this persists beyond 3 minutes, the worker may have crashed."
 
-    return result
+    return response
 
 
 # ─── Stage 2: Gather context + call Gemini ───────────────────────────────────

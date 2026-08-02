@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { fetchWithAuth, removeToken } from '@/lib/api';
 import { LogOut, LineChart, MessageSquare, AlertTriangle, CloudRain, PackageSearch, Loader2, Upload } from 'lucide-react';
+import { pollTaskWithTimeout } from '@/lib/pollTask';
 
 export default function Dashboard() {
   const router = useRouter();
@@ -19,7 +20,11 @@ export default function Dashboard() {
   const [taskStatus, setTaskStatus] = useState<any>(null);
   const [report, setReport] = useState<string | null>(null);
   const [error, setError] = useState('');
-  const [polling, setPolling] = useState(false);
+  
+  // New training/polling states
+  const [isTraining, setIsTraining] = useState(false);
+  const [trainingError, setTrainingError] = useState<string | null>(null);
+  const [pollingStatus, setPollingStatus] = useState<string | null>(null);
   
   // Upload state
   const [file, setFile] = useState<File | null>(null);
@@ -31,38 +36,11 @@ export default function Dashboard() {
   const [history, setHistory] = useState<any[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
 
-  // Poll for Celery Worker status
+  // Fetch metadata on mount
   useEffect(() => {
+    fetchMeta();
     fetchHistory();
-    let interval: NodeJS.Timeout;
-    
-    const checkStatus = async () => {
-      if (!taskStatus?.task_id) return;
-      try {
-        const res = await fetchWithAuth(`/task/${taskStatus.task_id}`);
-        const data = await res.json();
-        
-        if (data.task_status === 'SUCCESS') {
-          setTaskStatus(data);
-          setPolling(false);
-          // Auto-trigger Stage 2 (LLM Analysis)
-          handleAnalyze(data.result);
-        } else if (data.task_status === 'FAILURE') {
-          setError(data.error || 'Forecasting failed');
-          setPolling(false);
-        } else {
-          setTaskStatus(data);
-        }
-      } catch(e) {
-        setPolling(false);
-      }
-    };
-
-    if (polling) {
-      interval = setInterval(checkStatus, 2000);
-    }
-    return () => clearInterval(interval);
-  }, [polling, taskStatus]);
+  }, []);
 
   const fetchMeta = async () => {
     try {
@@ -93,10 +71,6 @@ export default function Dashboard() {
       console.error(e);
     }
   };
-
-  useEffect(() => {
-    fetchMeta();
-  }, []);
 
   const handleLogout = () => {
     removeToken();
@@ -133,31 +107,7 @@ export default function Dashboard() {
     }
   };
 
-  const handleGenerateForecast = async () => {
-    setError('');
-    setReport(null);
-    setTaskStatus({ task_status: 'PENDING' });
-    
-    try {
-      const formData = new FormData();
-      formData.append('store', store);
-      formData.append('item', item);
-      
-      const res = await fetchWithAuth('/train-async', {
-        method: 'POST',
-        body: formData
-      });
-      
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.detail || 'Request failed');
-      
-      setTaskStatus({ task_id: data.task_id, task_status: 'PROCESSING' });
-      setPolling(true);
-    } catch (err: any) {
-      setError(err.message);
-      setTaskStatus(null);
-    }
-  };
+  // ─── Forecast & Analysis ────────────────────────────────────────────────────
 
   const handleAnalyze = async (forecastResult: any) => {
     setTaskStatus((prev: any) => ({ ...prev, task_status: 'GENERATING_REPORT' }));
@@ -181,8 +131,61 @@ export default function Dashboard() {
     } catch (err: any) {
       setError(err.message);
       setTaskStatus((prev: any) => ({ ...prev, task_status: 'ERROR' }));
+      throw err; // Re-throw so the caller can handle it
     }
   };
+
+  const handleGenerateForecast = async () => {
+    setError('');
+    setReport(null);
+    setTrainingError(null);
+    setIsTraining(true);
+    setPollingStatus('Starting forecast task…');
+    setTaskStatus({ task_status: 'PROCESSING' });
+
+    try {
+      const formData = new FormData();
+      formData.append('store', store);
+      formData.append('item', item);
+
+      const res = await fetchWithAuth('/train-async', {
+        method: 'POST',
+        body: formData
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Request failed');
+
+      const taskId = data.task_id;
+      setTaskStatus({ task_id: taskId, task_status: 'PROCESSING' });
+
+      // Poll with timeout
+      const result = await pollTaskWithTimeout(
+        taskId,
+        90_000,
+        (elapsedMs, pollCount) => {
+          setPollingStatus(`Training model… ${Math.round(elapsedMs / 1000)}s elapsed`);
+        }
+      );
+
+      // On success, result is the task result (contains forecast_id)
+      setPollingStatus('Training complete. Generating analysis…');
+
+      // Now call analysis with the forecast result
+      await handleAnalyze(result.result);
+
+      setPollingStatus(null);
+      setIsTraining(false);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unknown error';
+      setTrainingError(message);
+      setTaskStatus({ task_status: 'ERROR' });
+      setPollingStatus(null);
+      setIsTraining(false);
+    }
+  };
+
+  // ─── History ────────────────────────────────────────────────────────────────
 
   const fetchHistory = async () => {
     setLoadingHistory(true);
@@ -202,6 +205,8 @@ export default function Dashboard() {
   const loadPastForecast = async (id: number) => {
     setTaskStatus({ task_status: 'LOADING_PAST' });
     setReport(null);
+    setError('');
+    setTrainingError(null);
     try {
       const res = await fetchWithAuth(`/forecast/${id}`);
       const data = await res.json();
@@ -216,6 +221,8 @@ export default function Dashboard() {
       setTaskStatus(null);
     }
   };
+
+  // ─── Render ────────────────────────────────────────────────────────────────
 
   return (
     <div className="min-h-screen bg-gray-950 text-gray-200">
@@ -384,10 +391,10 @@ export default function Dashboard() {
 
               <button 
                 onClick={handleGenerateForecast}
-                disabled={polling || taskStatus?.task_status === 'GENERATING_REPORT'}
+                disabled={isTraining || taskStatus?.task_status === 'GENERATING_REPORT'}
                 className="w-full mt-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-medium py-3 px-4 rounded-xl shadow-lg shadow-blue-500/25 transition-all active:scale-[0.98] disabled:opacity-50 flex justify-center items-center"
               >
-                {polling || taskStatus?.task_status === 'GENERATING_REPORT' ? (
+                {isTraining || taskStatus?.task_status === 'GENERATING_REPORT' ? (
                   <Loader2 className="w-5 h-5 animate-spin" />
                 ) : (
                   'Generate Intelligence Report'
@@ -407,8 +414,21 @@ export default function Dashboard() {
                taskStatus.task_status === 'ERROR' ? <AlertTriangle className="w-4 h-4"/> :
                <Loader2 className="w-4 h-4 animate-spin"/>}
               <span className="text-sm font-medium tracking-wide">
-                SYSTEM STATUS: {taskStatus.task_status}
+                SYSTEM STATUS: {pollingStatus || taskStatus.task_status}
               </span>
+            </div>
+          )}
+
+          {/* Training error display */}
+          {trainingError && (
+            <div className="rounded-lg border border-red-500/30 bg-red-950/20 p-4 text-sm text-red-300">
+              <strong>Training failed:</strong> {trainingError}
+              <button
+                onClick={() => setTrainingError(null)}
+                className="ml-4 underline hover:no-underline"
+              >
+                Dismiss
+              </button>
             </div>
           )}
 
@@ -440,14 +460,14 @@ export default function Dashboard() {
                  </div>
               ) : (
                 <div className="prose prose-invert prose-blue max-w-none text-gray-300">
-                  {/* Minimalistic markdown rendering (could be replaced with react-markdown) */}
+                  {/* Minimalistic markdown rendering */}
                   {report.split('\n').map((line, i) => {
                     if (line.startsWith('# ')) return <h1 key={i} className="text-2xl font-bold text-white mt-8 mb-4 border-b border-gray-800 pb-2">{line.replace('# ', '')}</h1>;
                     if (line.startsWith('## ')) return <h2 key={i} className="text-xl font-semibold text-white mt-6 mb-3">{line.replace('## ', '')}</h2>;
                     if (line.startsWith('### ')) return <h3 key={i} className="text-lg font-medium text-white mt-4 mb-2">{line.replace('### ', '')}</h3>;
                     if (line.startsWith('- ') || line.startsWith('* ')) return <li key={i} className="ml-4 mt-1 opacity-90">{line.substring(2)}</li>;
                     if (line.trim() === '') return <br key={i}/>;
-                    if (line.includes('**')) { // simple bold parser
+                    if (line.includes('**')) {
                       const parts = line.split('**');
                       return <p key={i} className="leading-relaxed opacity-90">{parts.map((part, j) => j % 2 !== 0 ? <strong key={j} className="text-white font-semibold">{part}</strong> : part)}</p>;
                     }
