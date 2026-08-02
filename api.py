@@ -13,6 +13,7 @@ import io
 import os
 import pandas as pd
 from contextlib import asynccontextmanager
+from models import ForecastMetrics
 
 from fastapi import (
     FastAPI,
@@ -216,6 +217,63 @@ async def get_forecast_history(
         }
         for f in forecasts
     ]
+
+@app.get("/forecast/{forecast_id}/metrics")
+async def get_forecast_metrics(
+    forecast_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),  # match your existing auth pattern
+):
+    """
+    Returns Prophet cross-validation accuracy metrics for a specific forecast.
+    Metrics are computed asynchronously by the Celery worker after training.
+
+    Returns 404 if metrics are not yet available (worker still running)
+    or if cross-validation failed for this dataset.
+    """
+    # Ensure the forecast belongs to the requesting merchant
+    forecast = db.query(Forecast).filter(
+        Forecast.id == forecast_id,
+        Forecast.merchant_id == current_user.id
+    ).first()
+
+    if not forecast:
+        raise HTTPException(status_code=404, detail="Forecast not found")
+
+    metrics = db.query(ForecastMetrics).filter(
+        ForecastMetrics.forecast_id == forecast_id
+    ).first()
+
+    if not metrics:
+        raise HTTPException(
+            status_code=404,
+            detail="Metrics not yet available. The model may still be training, "
+                   "or cross-validation was skipped for this dataset size."
+        )
+
+    return {
+        "forecast_id": forecast_id,
+        "mae": metrics.mae,
+        "rmse": metrics.rmse,
+        "mape": metrics.mape,
+        "coverage": metrics.coverage,
+        "horizon_days": metrics.horizon_days,
+        "interpretation": _interpret_mape(metrics.mape),
+    }
+
+
+def _interpret_mape(mape: float) -> str:
+    """Returns a human-readable accuracy label based on MAPE thresholds."""
+    if mape < 5:
+        return "Excellent (MAPE < 5%)"
+    elif mape < 10:
+        return "Good (MAPE 5–10%)"
+    elif mape < 20:
+        return "Acceptable (MAPE 10–20%)"
+    elif mape < 40:
+        return "Poor — consider more training data (MAPE 20–40%)"
+    else:
+        return "Unreliable — this dataset may be too noisy for forecasting (MAPE > 40%)"
 
 
 @app.get("/forecast/{forecast_id}")

@@ -5,6 +5,8 @@ from database import SessionLocal
 from models import HistoricalSale, Forecast
 from forecast_model import run_forecast
 from dotenv import load_dotenv
+from models import ForecastMetrics
+
 
 load_dotenv()
 
@@ -82,3 +84,24 @@ def run_async_forecast(self, store_id: int, product_pk: int):
         raise e
     finally:
         db.close()
+
+try:
+    metrics_dict = evaluate_model(model, df, horizon_days=30)
+    if metrics_dict:
+        db = SessionLocal()
+        try:
+            db_metrics = ForecastMetrics(
+                forecast_id=forecast_id,  # the ID of the just-saved Forecast row
+                mae=metrics_dict["mae"],
+                rmse=metrics_dict["rmse"],
+                mape=metrics_dict["mape"],
+                coverage=metrics_dict.get("coverage") or 0.0,
+                horizon_days=metrics_dict["horizon_days"],
+            )
+            db.add(db_metrics)
+            db.commit()
+        finally:
+            db.close()
+except Exception as e:
+    # Metrics are best-effort — don't fail the entire task if they error
+    print(f"[celery_worker] Metrics computation failed (non-fatal): {e}")

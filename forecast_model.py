@@ -11,6 +11,7 @@ or saved — every request trains fresh from the uploaded data.
 import warnings
 import pandas as pd
 from prophet import Prophet
+from prophet.diagnostics import cross_validation, performance_metrics
 
 warnings.filterwarnings("ignore")
 
@@ -125,3 +126,64 @@ def run_forecast(df: pd.DataFrame, store: int, item: str, periods: int = 7) -> d
         "historical_df": filtered,
         "summary": summary,
     }
+
+def evaluate_model(model: Prophet, df: pd.DataFrame, horizon_days: int = 30) -> dict:
+    """
+    Run Prophet cross-validation on the trained model and return accuracy metrics.
+
+    Uses a rolling-window approach:
+    - initial training period = 80% of total data history
+    - cutoff period = horizon_days / 2 (rolling window step)
+    - horizon = horizon_days
+
+    Returns a dict with mae, rmse, mape (%), coverage (%), horizon_days.
+
+    NOTE: Cross-validation adds ~2-5x the training time. For datasets with
+    < 60 days of history, it falls back to a simple in-sample error estimate
+    to avoid insufficient-data errors from Prophet's CV engine.
+    """
+    data_days = int((df['ds'].max() - df['ds'].min()).days)
+
+    # Minimum viable data for CV: need at least 2x horizon
+    if data_days < horizon_days * 2:
+        # Fallback: compute in-sample MAE from the fitted model's predictions
+        forecast = model.predict(df[['ds']])
+        merged = df.merge(forecast[['ds', 'yhat']], on='ds')
+        mae = float((merged['y'] - merged['yhat']).abs().mean())
+        rmse = float(((merged['y'] - merged['yhat']) ** 2).mean() ** 0.5)
+        mape = float(((merged['y'] - merged['yhat']).abs() / merged['y'].replace(0, 1)).mean() * 100)
+        return {
+            "mae": round(mae, 4),
+            "rmse": round(rmse, 4),
+            "mape": round(mape, 2),
+            "coverage": None,  # Cannot compute coverage from in-sample
+            "horizon_days": horizon_days,
+            "method": "in_sample",  # Flag so frontend can show a note
+        }
+
+    initial_days = max(int(data_days * 0.8), horizon_days * 2)
+    period_days = max(horizon_days // 2, 7)  # At least weekly cutoffs
+
+    try:
+        cv_df = cross_validation(
+            model,
+            initial=f"{initial_days} days",
+            period=f"{period_days} days",
+            horizon=f"{horizon_days} days",
+            parallel="processes",
+        )
+        metrics_df = performance_metrics(cv_df)
+
+        return {
+            "mae": round(float(metrics_df["mae"].mean()), 4),
+            "rmse": round(float(metrics_df["rmse"].mean()), 4),
+            "mape": round(float(metrics_df["mape"].mean() * 100), 2),
+            "coverage": round(float(metrics_df["coverage"].mean() * 100), 2),
+            "horizon_days": horizon_days,
+            "method": "cross_validation",
+        }
+
+    except Exception as e:
+        # CV can fail on sparse data — log and return None gracefully
+        print(f"[evaluate_model] Cross-validation failed: {e}. Metrics will be unavailable.")
+        return None
