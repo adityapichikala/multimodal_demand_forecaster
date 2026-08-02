@@ -49,5 +49,24 @@ class Forecast(Base):
     forecast_date = Column(DateTime, default=datetime.datetime.utcnow)
     forecast_data = Column(JSON)  # Store Prophet output
     gemini_report = Column(JSON)  # Store final AI report
-
+    metrics = relationship("ForecastMetrics", back_populates="forecast", uselist=False)
     product = relationship("Product", back_populates="forecasts")
+
+class ForecastMetrics(Base):
+    """
+    Stores Prophet cross-validation accuracy metrics for a forecast.
+    Created once per forecast run by the Celery worker after training.
+    """
+    __tablename__ = "forecast_metrics"
+
+    id = Column(Integer, primary_key=True, index=True)
+    forecast_id = Column(Integer, ForeignKey("forecasts.id"), nullable=False, unique=True)
+    mae = Column(Float, nullable=False, comment="Mean Absolute Error")
+    rmse = Column(Float, nullable=False, comment="Root Mean Squared Error")
+    mape = Column(Float, nullable=False, comment="Mean Absolute Percentage Error (%)")
+    coverage = Column(Float, nullable=False, comment="% of actuals within yhat_lower/upper interval")
+    horizon_days = Column(Integer, nullable=False, default=30)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationship back to parent forecast
+    forecast = relationship("Forecast", back_populates="metrics")
