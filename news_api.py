@@ -62,7 +62,7 @@ async def get_news_summary(
     if not articles:
         return "[News] No relevant news articles found at this time."
 
-    lines = [f"📰 Top News Headlines (related to: {search_terms}):"]
+    lines = [f"📰 Top News Headlines (related to: {search_terms}):"]  # noqa: E231
     for i, article in enumerate(articles[:max_articles], 1):
         title = article.get("title", "No title")
         description = article.get("body", "")  # newsapi.ai returns 'body'

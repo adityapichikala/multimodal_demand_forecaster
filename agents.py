@@ -110,7 +110,7 @@ Maintain current stocking levels. Stockout risk is low.
     Provide a concise bulleted summary of the "math facts".
 
     Data:
-    {json.dumps(forecast_summary, indent=2)}
+    {json.dumps(forecast_summary, indent=2)}  # noqa: E231
 
     IMPORTANT: Explicitly identify the PEAK (Maximum) forecasted value in your summary.
     """
@@ -127,10 +127,10 @@ Maintain current stocking levels. Stockout risk is low.
     If there are no major risks, state that explicitly.
 
     Weather:
-    {weather_text}
+    {weather_text}  # noqa: E231
 
     News:
-    {news_text}
+    {news_text}  # noqa: E231
     """
     researcher_output = safe_llm.invoke(
         [HumanMessage(content=researcher_prompt)], config=config
@@ -143,15 +143,15 @@ Maintain current stocking levels. Stockout risk is low.
     Draft a comprehensive, highly readable Markdown report combining the Mathematical Facts from the Data Analyst
     and the Contextual Risks from the Context Researcher.
 
-    Store ID: {forecast_summary.get('store', 'N/A')}
+    Store ID: {forecast_summary.get('store', 'N/A')}  # noqa: E272
     Product ID: {forecast_summary.get('item', 'N/A')}
     Last Historical Date: {forecast_summary.get('last_historical_date', 'N/A')}
 
-    Math Facts:
-    {analyst_output}
+    Math Facts:  # noqa: E231
+    {analyst_output}  # noqa: E231
 
-    Contextual Risk:
-    {researcher_output}
+    Contextual Risk:  # noqa: E231
+    {researcher_output}  # noqa: E231
 
     1. Executive Summary (Use current date: {date.today().strftime('%B %d, %Y')})
     2. Quantitative Forecast (The Math)
@@ -172,10 +172,10 @@ Maintain current stocking levels. Stockout risk is low.
     Specifically check that any numbers mentioned in the Draft exist exactly in the Math Facts.
 
     Math Facts (TRUTH):
-    {analyst_output}
+    {analyst_output}  # noqa: E231
 
     Drafted Report:
-    {draft_report}
+    {draft_report}  # noqa: E231
 
     Does the Drafted Report hallucinate any numbers or make claims that violently contradict the Math Facts?
     If YES: Rewrite the Drafted Report to fix the hallucinations but keep the structure.
