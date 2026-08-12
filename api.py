@@ -85,11 +85,9 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 @app.middleware("http")
 async def add_process_time_header(request: Request, call_next):
-    print(f"DEBUG: Incoming {request.method} request to {request.url}")
-    print(f"DEBUG: Origin: {request.headers.get('origin')}")
-    print(
-        f"DEBUG: Auth: {request.headers.get('authorization')[:20] if request.headers.get('authorization') else 'None'}"
-    )
+    if os.getenv("DEBUG", "false").lower() == "true":
+        print(f"DEBUG: Incoming {request.method} request to {request.url}")
+        print(f"DEBUG: Origin: {request.headers.get('origin')}")
     response = await call_next(request)
     return response
 
