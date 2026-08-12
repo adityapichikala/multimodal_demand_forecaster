@@ -86,11 +86,9 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 @app.middleware("http")
 async def add_process_time_header(request: Request, call_next):
-    print(f"DEBUG: Incoming {request.method} request to {request.url}")
-    print(f"DEBUG: Origin: {request.headers.get('origin')}")
-    print(
-        f"DEBUG: Auth: {request.headers.get('authorization')[:20] if request.headers.get('authorization') else 'None'}"
-    )
+    if os.getenv("DEBUG", "false").lower() == "true":
+        print(f"DEBUG: Incoming {request.method} request to {request.url}")
+        print(f"DEBUG: Origin: {request.headers.get('origin')}")
     response = await call_next(request)
     return response
 
@@ -208,7 +206,7 @@ async def get_forecast_history(
     return [
         {
             "id": f.id,
-            "created_at": f.created_at.isoformat(),
+            "created_at": f.forecast_date.isoformat(),
             "store_id": f.store_id,
             "product_name": f.product.name,
             "product_id": f.product.item_id,
@@ -242,7 +240,7 @@ async def get_forecast_detail(
 
     return {
         "id": forecast.id,
-        "created_at": forecast.created_at.isoformat(),
+        "created_at": forecast.forecast_date.isoformat(),
         "store_id": forecast.store_id,
         "product_name": forecast.product.name,
         "product_id": forecast.product.item_id,
