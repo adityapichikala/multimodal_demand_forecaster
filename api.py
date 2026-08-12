@@ -113,6 +113,11 @@ async def register(
     name: str = Form("Default Merchant"),
     db: Session = Depends(get_db),
 ):
+    if not password or len(password.strip()) < 8:
+        raise HTTPException(
+            status_code=400, detail="Password must be at least 8 characters long"
+        )
+
     db_merchant = db.query(Merchant).filter(Merchant.email == email).first()
     if db_merchant:
         raise HTTPException(status_code=400, detail="Email already registered")
