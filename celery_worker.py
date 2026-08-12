@@ -1,6 +1,7 @@
 import os
 import pandas as pd
 from celery import Celery
+from celery.exceptions import SoftTimeLimitExceeded
 from database import SessionLocal
 from models import HistoricalSale, Forecast
 from forecast_model import run_forecast
@@ -12,6 +13,31 @@ redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 
 celery_app = Celery("demand_forecaster", broker=redis_url, backend=redis_url)
 
+celery_app.conf.update(
+    # ── Timeout configuration ────────────────────────────────────────
+    # Prophet gets 120 seconds of CPU. SoftTimeLimitExceeded is raised
+    # as a catchable exception inside the task, allowing clean shutdown.
+    task_soft_time_limit=120,
+    # Hard kill signal at 150 seconds — guarantees worker process dies
+    # and Redis gets a FAILURE state rather than staying PENDING forever.
+    task_time_limit=150,
+
+    # ── Result backend TTL ───────────────────────────────────────────
+    # Results expire after 1 hour — prevents Redis memory filling up
+    # with stale task results from old forecasting jobs.
+    result_expires=3600,
+
+    # ── Reliability ─────────────────────────────────────────────────
+    # Re-queue the task if the worker is killed BEFORE it acknowledges.
+    # This means OOM kills are retried, not silently lost.
+    task_acks_late=True,
+
+    # Reject (re-queue) tasks when worker shuts down mid-execution.
+    task_reject_on_worker_lost=True,
+
+    # Limit max retries to prevent infinite re-queuing loops.
+    task_max_retries=2,
+)
 
 @celery_app.task(bind=True)
 def run_async_forecast(self, store_id: int, product_pk: int):
