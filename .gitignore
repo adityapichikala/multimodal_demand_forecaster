@@ -5,3 +5,9 @@ __pycache__/
 .venv/
 dist/
 build/
+
+# Development screenshots — use docs/assets/ for intentional images
+Screenshot*.png
+Screenshot*.jpg
+screenshot*.png
+screenshot*.jpg

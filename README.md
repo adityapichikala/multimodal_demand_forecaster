@@ -262,7 +262,7 @@ This spins up **5 containers**: PostgreSQL, Redis, FastAPI API, Celery Worker, a
 | 💾 **PostgreSQL** | `localhost:5432` | Direct database access |
 | 📦 **Redis** | `localhost:6379` | Cache & task broker |
 
-![App Dashboard](Screenshot%202026-03-20%20231004.png)
+![App Dashboard](docs/assets/dashboard_screenshot.png)
 
 ### First Run Walkthrough
 
