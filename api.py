@@ -205,7 +205,7 @@ async def get_forecast_history(
     return [
         {
             "id": f.id,
-            "created_at": f.created_at.isoformat(),
+            "created_at": f.forecast_date.isoformat(),
             "store_id": f.store_id,
             "product_name": f.product.name,
             "product_id": f.product.item_id,
@@ -239,7 +239,7 @@ async def get_forecast_detail(
 
     return {
         "id": forecast.id,
-        "created_at": forecast.created_at.isoformat(),
+        "created_at": forecast.forecast_date.isoformat(),
         "store_id": forecast.store_id,
         "product_name": forecast.product.name,
         "product_id": forecast.product.item_id,
